@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from engine import analyze, demo_data
+from backtest import backtest
 
 st.set_page_config(page_title='Trader Pro AI Elite',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
 st.markdown('''<style>
@@ -23,7 +24,7 @@ section[data-testid="stSidebar"]{background:#101a2b}
 @media(max-width:640px){.block-container{padding:.8rem .7rem 2rem}.hero{padding:16px}.signal{padding:14px}}
 </style>''',unsafe_allow_html=True)
 
-st.markdown('''<div class="hero"><div class="eyebrow">ANALYTICS TERMINAL · V0.2</div>
+st.markdown('''<div class="hero"><div class="eyebrow">ANALYTICS TERMINAL · V0.3</div>
 <div class="hero-title">◈ TRADER PRO AI ELITE</div>
 <div class="hero-sub">WIN · Intraday · Motor experimental de sinais · Confirmação manual</div>
 <span class="pill">● MODO DE PESQUISA — sem ordens reais</span></div>''',unsafe_allow_html=True)
@@ -111,4 +112,39 @@ with st.expander('🗂️ Histórico dos últimos candles'):
     st.dataframe(out[cols].tail(20),use_container_width=True,hide_index=True)
 
 st.divider()
-st.caption('Trader Pro AI Elite · v0.2 · Protótipo de pesquisa. Não calcula taxa de acerto nem executa operações. Não utilizar para decisões financeiras reais.')
+st.caption('Trader Pro AI Elite · v0.3 · Protótipo de pesquisa. Não calcula taxa de acerto nem executa operações. Não utilizar para decisões financeiras reais.')
+
+
+st.divider()
+st.subheader('🧪 Laboratório de backtesting · v0.3')
+st.caption('Simulação retrospectiva, sem previsão ou garantia. Entrada na abertura do candle seguinte ao sinal; apenas uma posição por vez. Stops e alvos usam ATR do candle do sinal.')
+with st.expander('Configurar teste', expanded=True):
+    bt1, bt2 = st.columns(2)
+    with bt1:
+        cost = st.number_input('Custo total estimado por operação (pontos)', min_value=0.0, value=2.0, step=0.5, help='Soma de taxas e slippage expressa em pontos de índice, por operação completa.')
+    with bt2:
+        max_hold = st.number_input('Duração máxima (candles de 5 min)', min_value=1, max_value=100, value=12)
+    run = st.button('Executar backtest', type='primary', use_container_width=True)
+if run:
+    if source == 'Demonstração fictícia':
+        st.warning('Este teste usa dados FICTÍCIOS e não mede a eficácia da estratégia no WIN real.')
+    try:
+        trades = backtest(out, cost_points=cost, max_hold=int(max_hold))
+        if trades.empty:
+            st.info('Nenhuma operação foi aberta com os filtros atuais nesse conjunto de dados.')
+        else:
+            wins = int((trades.net_points > 0).sum())
+            net = float(trades.net_points.sum())
+            equity = trades.net_points.cumsum()
+            drawdown = float((equity - equity.cummax().clip(lower=0)).min())
+            x1,x2,x3,x4 = st.columns(4)
+            x1.metric('Operações',len(trades))
+            x2.metric('Acerto líquido',f'{wins/len(trades):.1%}')
+            x3.metric('Saldo líquido',f'{net:+.1f} pts')
+            x4.metric('Drawdown',f'{drawdown:.1f} pts')
+            st.line_chart(equity.reset_index(drop=True), y_label='Pontos acumulados')
+            st.dataframe(trades, use_container_width=True, hide_index=True)
+            st.download_button('Baixar operações (CSV)', trades.to_csv(index=False).encode('utf-8'), 'backtest_trader_pro_ai_elite_v03.csv', 'text/csv')
+            st.caption('Resultado em pontos de índice, NÃO em reais. Não inclui margem, tributação ou custos reais de corretora. Acerto líquido = operações com resultado após custos positivo.')
+    except ValueError as exc:
+        st.error(f'Não foi possível executar o teste: {exc}')
