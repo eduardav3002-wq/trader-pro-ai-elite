@@ -1,3 +1,57 @@
+# ◈ Trader Pro AI Elite v1.6 — Comparação matemática de preços
+
+**WIN intraday · Streamlit mobile-first · pesquisa, sem ordens reais · 126 testes de código.**
+
+## O que foi acrescentado
+
+Novo módulo `cross_price_lab.py` e testes em `test_cross_price_lab.py`. Na aba **🧾 Fonte M1**, depois de importar CSV/TSV com ticker, a seção **🔍 Validação cruzada de preços · v1.6** apresenta:
+
+- **Diferença ajustado − original para cada OHLC M1**, incluindo mínimos, máximos e eventos de divergência entre os quatro campos.
+- Comparação com coluna opcional `Ajuste`, quando presente; se o ajuste declarado não coincidir com a diferença calculada, gera alerta.
+- Classificação do modelo observado: `ADITIVO_CONSTANTE_NA_AMOSTRA`, `ADITIVO_CONSTANTE_POR_CONTRATO_DIA`, `AJUSTE_VARIAVEL_INTRADIA`, `DIVERGENCIAS_NA_TRANSFORMACAO` ou `SEM_SERIE_AJUSTADA`.
+- **Mudanças entre minutos consecutivos**, dentro do mesmo ticker e pregão: não compara através de buracos, vencimentos, nem entre dias.
+- **Comparação das séries M5 agregadas separadamente**: sinaliza se os valores OHLC já agregados não diferem por uma translação uniforme de preço.
+- Exportação de resumo JSON, comparação por dia CSV, eventos CSV, comparação M5 CSV.
+- Conferência opcional do SHA-256 contra o JSON de laudo da v1.5. Hash igual **não confirma origem, ticker, corretora, licenças nem autenticidade**.
+
+**IMPORTANTE:** isto compara séries dentro do MESMO ARQUIVO; não constitui verificação cruzada com uma segunda fonte independente e NÃO reconstrói o preço de negociação, nem certifica metodologia de rolagem.
+
+### Exemplo explicado — apenas para interpretar a ferramenta
+
+O laudo compartilhado do exemplo WINZ22 de 31/10/2022 (v1.5) registra 532 minutos M1, 106 M5 completos, dois minutos sem grupo M5, nenhum salto interno e diferença mínima/máxima de +63.385 pontos. Esses valores são registros do **laudo v1.5, não validação independente**. Na v1.6, ao reenviar o CSV de origem, os cálculos serão refeitos candle a candle. Sem esse arquivo, não é possível afirmar que a nova análise foi executada em seus 532 candles.
+
+## Passo a passo pelo Android
+
+1. Faça backup do repositório se desejar. Baixe e **extraia o ZIP** da v1.6.
+2. No repositório GitHub existente (branch `main`), envie os **26 arquivos extraídos para a raiz** e substitua os arquivos anteriores. Não suba o arquivo ZIP no lugar do código.
+3. Confirme **Commit changes**. No Streamlit Cloud, aguarde a implantação completar (e confira os logs em caso de erro). Não é necessário pagar Replit.
+4. Abra o mesmo endereço do aplicativo e confirme **RESEARCH TERMINAL · V1.6**.
+5. Selecione **🧾 Conferir CSV com ticker · SEM backtest** e importe novamente o arquivo original `WINZ22_M1_2022-10-31.csv` que você baixou no celular. Declare a fonte e o fuso corretamente — se o fuso não é conhecido, mantenha *Desconhecido*.
+6. Abra **🧾 Fonte M1** e role até **🔍 Validação cruzada de preços · v1.6**.
+7. Opcional: em **Conferir identidade com laudo anterior v1.5**, envie `laudo_fonte_win_v15.json`. Ele compara apenas o SHA-256 dos bytes do CSV, não os preços contra bolsa ou outra fonte.
+
+## Segurança e limitações
+
+- O módulo é **descritivo**; não cria sinais, retornos de trades, previsões ou backtests.
+- **0 dias certificados, backtest não liberado, nenhuma ordem real.** Não alterar esses controles com base apenas em consistência matemática.
+- Os preços `Open_Adj/...` são mantidos separados dos campos `Open/...`; jamais são utilizados como preços executáveis.
+- Não preenche M1 ausentes e não atravessa pausas, mudanças de ticker ou sessões para comparar retornos M1.
+- Verificação de vencimentos, feriados e horários oficiais requer fonte independente. O calendário 2026 do motor permanece preservado.
+- A v1.6 não autentica a B3, não valida licença de cotações e não possui integração com corretora.
+- Os testes verificam o código de regras, não execução no Streamlit Cloud: **o Streamlit não está instalado no ambiente de teste local**. Confira a nova aba no celular após publicação.
+
+## Testes de código
+
+```bash
+python -m pytest -q
+```
+
+**126 testes aprovados** no pacote atual. Para inspecionar somente a nova unidade: `python -m pytest test_cross_price_lab.py -q` (10 testes).
+
+---
+
+## Documentação anterior — v1.5 (recursos preservados)
+
 # ◈ Trader Pro AI Elite v1.5 — Laboratório de Fonte M1
 
 **WIN intraday · Streamlit responsivo · sem ordens reais, sem IA treinada e sem previsão garantida.**

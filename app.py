@@ -1,4 +1,4 @@
-"""Trader Pro AI Elite v1.5 — inspeção de dados M1 com ticker, sem ordens."""
+"""Trader Pro AI Elite v1.6 — validação matemática de preços, sem ordens."""
 import json
 
 import pandas as pd
@@ -15,9 +15,10 @@ from quality_lab import quality_triage
 from integrity_lab import assess_integrity, compare_daily_export
 from traceability_lab import read_contract_map, traceability_audit, EMPTY_TEMPLATE
 from source_lab import inspect_ticker_m1
+from cross_price_lab import audit_cross_prices, compare_v15_receipt
 from engine import analyze, demo_data, HOLIDAYS_2026, market_day_gate, signal_entry_gate, ENTRY_GATE_LABELS
 
-st.set_page_config(page_title='Trader Pro AI Elite · v1.5',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
+st.set_page_config(page_title='Trader Pro AI Elite · v1.6',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
 st.markdown("""<style>
 :root {color-scheme:dark}
 .stApp{background:radial-gradient(ellipse at 100% 0%,#1f173f 0%,#0c1020 35%,#080c16 72%);color:#edf1ff}
@@ -64,11 +65,11 @@ section[data-testid="stSidebar"]{background:#11162a}
 }
 </style>""",unsafe_allow_html=True)
 
-st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V1.5</div>
+st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V1.6</div>
 <div class="hero-title">◈ TRADER PRO AI ELITE</div>
 <div class="hero-sub">WIN · Intraday · Filtros EMA 9/21, RSI 14, ATR 14 e tendência 15m</div>
 <span class="pill">● PESQUISA SEGURA · ORDENS DESATIVADAS</span></div>''',unsafe_allow_html=True)
-st.caption('v1.5 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
+st.caption('v1.6 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
 st.markdown('### 📁 Escolha como analisar')
 source = st.radio('Fonte dos candles', ['Demonstração fictícia', 'CSV histórico 2026 · origem declarada', '🔬 Explorar 2019–2020 · SEM backtest', '🧾 Conferir CSV com ticker · SEM backtest'], index=0, horizontal=False, label_visibility='collapsed')
 st.caption('Demonstração = fictícia. Históricos = auditoria de origem declarada. O novo modo com ticker é apenas inspeção, SEM sinais ou backtest.')
@@ -95,6 +96,10 @@ source_m1_report=None
 source_m1_daily=None
 source_m1_gaps=None
 source_m1_m5=None
+cross_report=None
+cross_daily=None
+cross_events=None
+cross_m5=None
 if source.startswith('CSV histórico'):
     st.subheader('📁 Importação histórica — dados fornecidos pelo usuário')
     st.info('Obtenha o CSV de uma plataforma/fornecedor que tenha direito de fornecer WIN intraday. O app não busca dados da B3 automaticamente e não pode verificar a origem externa.')
@@ -156,6 +161,8 @@ elif source.startswith('🧾 Conferir'):
     else:
         try:
             source_m1_report,source_m1_daily,source_m1_gaps,source_m1_m5=inspect_ticker_m1(
+                source_m1_upload.getvalue(), source_m1_name, source_m1_timezone, source_m1_upload.name)
+            cross_report,cross_daily,cross_events,cross_m5=audit_cross_prices(
                 source_m1_upload.getvalue(), source_m1_name, source_m1_timezone, source_m1_upload.name)
             st.success(f"Arquivo lido: {source_m1_report['minutos_m1']} candles M1 · ticker(s) declarado(s): {', '.join(source_m1_report['tickers_declarados'])}.")
             st.warning('🛑 Não autenticado. Mesmo com contrato informado e preços ajustados, sinais, backtest e ordens seguem DESATIVADOS neste modo.')
@@ -814,7 +821,7 @@ with tab_data:
     st.caption('A v1.1 não baixa dados de terceiros, não verifica licenças, não acessa cotações ao vivo e não envia ordens. Resultado retrospectivo não prevê acertos futuros.')
 
 with tab_source:
-    st.subheader('🧾 Laboratório de fonte com ticker · v1.5')
+    st.subheader('🧾 Laboratório de fonte com ticker · v1.6')
     st.caption('Amostras M1 com contrato explícito. Distingue preço ORIGINAL de AJUSTADO sem afirmar que os dados são da B3. Não realiza operações.')
     if source_m1_report is None:
         st.info('Na seleção de fonte, escolha “🧾 Conferir CSV com ticker” e envie seu CSV M1 para gerar a inspeção.')
@@ -862,6 +869,71 @@ with tab_source:
             source_m1_m5.to_csv(index=False).encode('utf-8-sig'),
             'm5_exploratorio_com_ticker_v15.csv','text/csv',use_container_width=True)
         st.caption('A conversão descarta janelas incompletas. Não corrige lacunas, horários oficiais nem documentação de origem. O CSV convertido permanece NÃO autenticado.')
+        # V1.6: análises de preço permanecem totalmente desconectadas do motor de trading.
+        st.divider()
+        st.subheader('🔍 Validação cruzada de preços · v1.6')
+        st.caption('Compara matematicamente as colunas ORIGINAIS e AJUSTADAS do MESMO arquivo, candle a candle e em janelas M5 completas. Não é comparação com uma segunda fonte independente.')
+        if cross_report is None:
+            st.warning('O diagnóstico de preços ainda não está disponível para o CSV enviado.')
+        else:
+            cr=cross_report
+            if not cr['serie_ajustada_presente']:
+                st.info('O arquivo não possui série ajustada completa. Não é possível calcular o deslocamento entre preços.')
+            else:
+                a,b=st.columns(2)
+                a.metric('Ajuste mínimo (pts)',f"{cr['ajuste_minimo']:+,.0f}".replace(',','.'))
+                b.metric('Ajuste máximo (pts)',f"{cr['ajuste_maximo']:+,.0f}".replace(',','.'))
+                a.metric('Campos OHLC divergentes',cr['candles_com_campos_ohlc_divergentes'])
+                b.metric('M5 sem transformação uniforme',cr['candles_m5_com_transformacao_nao_uniforme'])
+                a.metric('Mudanças no ajuste M1',cr['mudancas_de_ajuste_entre_minutos_adjacentes'])
+                b.metric('Ajustes declarados divergentes',cr['candles_com_ajuste_declarado_divergente'])
+                model=cr['modelo_matematico_observado']
+                if model=='ADITIVO_CONSTANTE_NA_AMOSTRA':
+                    st.info('✅ Na amostra recebida, a diferença ajustado − original é CONSTANTE em todos os candles avaliados. Isso NÃO certifica preços, fuso, corretora ou metodologia de rolagem.')
+                elif model=='ADITIVO_CONSTANTE_POR_CONTRATO_DIA':
+                    st.warning('⚠️ A diferença é constante por contrato/dia, mas varia entre datas. É necessário investigar os limites das sessões; não assumir rolagem.')
+                else:
+                    st.warning('⚠️ Transformação com diferenças, ajustes variáveis ou campos sem consistência uniforme. Inspecione o relatório de eventos abaixo.')
+            st.error('🛑 0 dias certificados · nenhum backtest ou ordem liberado. Consistência matemática interna NÃO autentica as cotações.')
+            st.markdown('**📱 Diagnóstico por contrato e dia**')
+            for rec in cross_daily.head(6).to_dict('records'):
+                with st.container(border=True):
+                    st.markdown('**'+str(rec['dia'])+' · '+str(rec['contrato_declarado'])+'**')
+                    st.write(f"{rec['candles_m1']} candles M1 · {rec['mudancas_ajuste_m1']} mudança(s) de ajuste por minuto")
+                    if cr['serie_ajustada_presente']:
+                        st.caption(f"Deslocamento observado: {rec['offset_minimo']:+.0f} a {rec['offset_maximo']:+.0f} pontos · Apenas dados declarados")
+                    st.caption('NÃO CERTIFICADO · avaliação matemática')
+            st.markdown('**Eventos para investigação**')
+            st.caption(f"{cr['eventos_para_investigar']} evento(s) matemático(s). A lista exibida é curta para o celular; os CSVs incluem todos os registros.")
+            for rec in cross_events.head(6).to_dict('records'):
+                with st.container(border=True):
+                    st.markdown('**'+str(rec['classe'])+'**')
+                    st.write(str(rec['datetime'])+' · '+str(rec['contrato_declarado']))
+                    st.caption(str(rec['detalhe']))
+            st.download_button('⬇️ Baixar diagnóstico cruzado v1.6 (JSON)',
+                json.dumps(cr,ensure_ascii=False,indent=2).encode('utf-8'),
+                'diagnostico_cruzado_win_v16.json','application/json',use_container_width=True)
+            st.download_button('⬇️ Baixar comparação por dia v1.6 (CSV)',
+                cross_daily.to_csv(index=False).encode('utf-8-sig'),
+                'precos_por_dia_win_v16.csv','text/csv',use_container_width=True)
+            st.download_button('⬇️ Baixar eventos da transformação v1.6 (CSV)',
+                cross_events.to_csv(index=False).encode('utf-8-sig'),
+                'eventos_precos_win_v16.csv','text/csv',use_container_width=True)
+            st.download_button('⬇️ Baixar comparação M5 v1.6 (CSV)',
+                cross_m5.to_csv(index=False).encode('utf-8-sig'),
+                'comparacao_m5_win_v16.csv','text/csv',use_container_width=True)
+            with st.expander('🔏 Conferir identidade com laudo anterior v1.5 (opcional)',expanded=False):
+                st.caption('Envie o laudo JSON v1.5 deste MESMO arquivo para comparar hashes SHA-256. Igualdade prova apenas bytes iguais — não origem ou autenticidade.')
+                prior_upload=st.file_uploader('Laudo da v1.5',type=['json'],key='receipt_source_v15')
+                if prior_upload is not None:
+                    try:
+                        check_receipt=compare_v15_receipt(prior_upload.getvalue(),cr['sha256'])
+                        if check_receipt['sha256_igual']:
+                            st.success('O arquivo atual tem o mesmo SHA-256 do laudo v1.5. Ainda NÃO está autenticado.')
+                        else:
+                            st.warning('SHA-256 DIFERENTE do laudo v1.5. Pode ser um arquivo alterado ou outra exportação; verifique.')
+                    except (ValueError,TypeError) as exc:
+                        st.error(f'Não foi possível comparar o laudo: {exc}')
 
 st.divider()
-st.caption('Trader Pro AI Elite · v1.5 · Simulador de pesquisa. Horários de referência B3 para 2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')
+st.caption('Trader Pro AI Elite · v1.6 · Simulador de pesquisa. Horários de referência B3 para 2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')
