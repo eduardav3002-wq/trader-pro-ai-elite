@@ -1,4 +1,4 @@
-"""Trader Pro AI Elite v1.2 — pesquisa mobile-first, sem corretora nem ordens."""
+"""Trader Pro AI Elite v1.3 — laboratório descritivo de integridade, sem ordens."""
 import json
 
 import pandas as pd
@@ -12,9 +12,10 @@ from validation import chronological_validation
 from provenance import inspect_historical_csv
 from historical import audit_exploratory_csv, historical_day_gate, CLOSED_2019, CLOSED_2020, CALENDAR_SOURCES
 from quality_lab import quality_triage
+from integrity_lab import assess_integrity, compare_daily_export
 from engine import analyze, demo_data, HOLIDAYS_2026, market_day_gate, signal_entry_gate, ENTRY_GATE_LABELS
 
-st.set_page_config(page_title='Trader Pro AI Elite · v1.2',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
+st.set_page_config(page_title='Trader Pro AI Elite · v1.3',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
 st.markdown("""<style>
 :root {color-scheme:dark}
 .stApp{background:radial-gradient(ellipse at 100% 0%,#1f173f 0%,#0c1020 35%,#080c16 72%);color:#edf1ff}
@@ -61,11 +62,11 @@ section[data-testid="stSidebar"]{background:#11162a}
 }
 </style>""",unsafe_allow_html=True)
 
-st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V1.2</div>
+st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V1.3</div>
 <div class="hero-title">◈ TRADER PRO AI ELITE</div>
 <div class="hero-sub">WIN · Intraday · Filtros EMA 9/21, RSI 14, ATR 14 e tendência 15m</div>
 <span class="pill">● PESQUISA SEGURA · ORDENS DESATIVADAS</span></div>''',unsafe_allow_html=True)
-st.caption('v1.2 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
+st.caption('v1.3 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
 st.markdown('### 📁 Escolha como analisar')
 source = st.radio('Fonte dos candles', ['Demonstração fictícia', 'CSV histórico 2026 · origem declarada', '🔬 Explorar 2019–2020 · SEM backtest'], index=0, horizontal=False, label_visibility='collapsed')
 st.caption('Demonstração = dados fictícios. Histórico 2026 = validação estrita por contrato. Explorar 2019–2020 = auditoria sem sinais/backtest.')
@@ -170,7 +171,7 @@ with tab_historic:
             st.info(f"Conversão interna 1m → 5m: {r['conversao']['janelas_parciais_descartadas']} janelas incompletas descartadas; nenhum valor criado ou interpolado.")
         if r['pregoes_ausentes']:
             st.error('Datas esperadas sem registros: '+ ', '.join(r['pregoes_esperados_ausentes'][:12]))
-        st.subheader('🧬 Laboratório de Qualidade v1.2')
+        st.subheader('🧬 Laboratório de Qualidade v1.3')
         st.caption('Triagem descritiva — separa lacunas, aberturas e datas de rolagem. Nenhum dia é certificado, mesmo quando não aparece um alerta local.')
         triage,quality_summary=quality_triage(historical_candles,historical_daily,historical_gaps)
         q1,q2=st.columns(2)
@@ -182,10 +183,82 @@ with tab_historic:
         st.info('🔎 Conferência de vencimento: **10/02/2020 = próximo ao vencimento**; **12/02/2020 = vencimento nominal**. Os rótulos são recalculados pelas datas, independentemente do texto do relatório antigo.')
         if quality_summary['dias_com_discordancia_anterior']:
             st.error('Encontramos divergências entre datas nominais e rótulos anteriores; confira o CSV de triagem antes de qualquer análise adicional.')
+        # v1.3: segunda auditoria derivada dos próprios candles, nunca de sinais ou P&L.
+        integrity_days, integrity_events, integrity_months, integrity_expiries, integrity_summary = assess_integrity(
+            historical_candles, historical_daily)
+        st.subheader('🧭 Integridade dos contratos · v1.3')
+        st.caption('Pesquisa DESCRITIVA: avalia lacunas de tempo, diferenças de preço entre observações e janelas nominais de vencimento. Não identifica por si só a rolagem nem confirma a origem das cotações.')
+        a,b=st.columns(2)
+        a.metric('Candles ausentes entre extremos', integrity_summary['candles_ausentes_entre_extremos'])
+        b.metric('Saltos de tempo',integrity_summary['saltos_de_tempo'])
+        a.metric('Diferenças intradiárias destacadas',integrity_summary['diferencas_preco_adjacente_acima_limiar'])
+        b.metric('Variações entre sessões destacadas',integrity_summary['diferencas_entre_sessoes_top5pct'])
+        st.caption(f"Limiares calculados na própria amostra: ≥{integrity_summary['limiar_descritivo_diferenca_intradiaria_pts']} pts entre candles adjacentes; top 5% das diferenças observadas entre sessões (≥{integrity_summary['limiar_descritivo_top5pct_entre_sessoes_pts']:.2f} pts). São alertas exploratórios, não critérios de erro, previsão ou rolagem.")
+        st.error('🛑 Série contínua, ajustes de rolagem, ticker e origem primária NÃO comprovados. **0 dias certificados; backtest e ordens reais bloqueados.**')
+        st.markdown('**📱 Eventos para investigação**')
+        event_filter=st.selectbox('Escolha uma classe de eventos',[
+            'Lacunas de tempo','Diferenças de preço adjacentes','Diferenças entre sessões (top 5%)'
+        ],key='integrity_events_v13')
+        chosen_type={'Lacunas de tempo':'LACUNA_DE_TEMPO',
+                     'Diferenças de preço adjacentes':'DIFERENCA_PRECO_ADJACENTE',
+                     'Diferenças entre sessões (top 5%)':'DIFERENCA_ENTRE_SESSOES_P95'}[event_filter]
+        selected=integrity_events[integrity_events.tipo.eq(chosen_type)]
+        st.caption(f'{len(selected)} registros. Até 6 cartões nesta tela; todos disponíveis para baixar.')
+        for evt in selected.head(6).to_dict('records'):
+            with st.container(border=True):
+                st.markdown('**'+evt['dia']+'**')
+                st.write(str(evt['instante_anterior'])[11:16]+' → '+str(evt['instante_seguinte'])[11:16])
+                st.write('Diferença de preço observada: '+f"{evt['variacao_abertura_vs_fechamento_anterior_pts']:+.0f}"+' pts')
+                if evt['tipo']=='LACUNA_DE_TEMPO':
+                    st.caption(f"{int(evt['candles_ausentes'])} candles de 5 min ausentes entre observações")
+                st.caption(evt['interpretacao'])
+        st.markdown('**🗓️ Qualidade por mês**')
+        for mo in integrity_months.to_dict('records'):
+            with st.expander(f"{mo['mes']} · {mo['pregoes']} pregões · {mo['dias_com_lacunas']} dias com lacunas"):
+                st.write(f"{mo['candles_5min']:,} candles observados · {mo['candles_ausentes_entre_extremos']} faltantes entre extremos".replace(',','.'))
+                st.caption(f"{mo['dias_abertura_divergente']} aberturas divergentes · {mo['dias_inter_sessoes_top5']} dias com diferenças entre sessões no top 5% da amostra · {mo['vencimentos_nominais']} vencimento(s) nominal(is)")
+                st.caption('Mês não certificado: a ausência de problemas locais não comprova completude da sessão.')
+        st.markdown('**📅 Vencimentos nominais — investigação, não rolagem confirmada**')
+        for ex in integrity_expiries.to_dict('records'):
+            with st.expander(f"{ex['vencimento_nominal']} · {ex['dias_observados_na_janela']} dias na janela ±2 dias"):
+                st.write(f"{ex['dias_com_lacunas']} dias com lacunas · {ex['dias_abertura_divergente']} com abertura divergente")
+                st.caption('Sem identificação do contrato por candle; não é possível dizer em qual dia houve rolagem ou se os preços foram ajustados.')
+        st.download_button('⬇️ Baixar integridade por dia v1.3 (CSV)',
+            integrity_days.to_csv(index=False).encode('utf-8-sig'),
+            'integridade_win_por_dia_v13.csv','text/csv',use_container_width=True)
+        st.download_button('⬇️ Baixar eventos de continuidade v1.3 (CSV)',
+            integrity_events.to_csv(index=False).encode('utf-8-sig'),
+            'eventos_continuidade_win_v13.csv','text/csv',use_container_width=True)
+        st.download_button('⬇️ Baixar qualidade por mês v1.3 (CSV)',
+            integrity_months.to_csv(index=False).encode('utf-8-sig'),
+            'integridade_win_por_mes_v13.csv','text/csv',use_container_width=True)
+        st.download_button('⬇️ Baixar janelas nominais de vencimento (CSV)',
+            integrity_expiries.to_csv(index=False).encode('utf-8-sig'),
+            'janelas_vencimento_win_v13.csv','text/csv',use_container_width=True)
+        st.download_button('⬇️ Baixar relatório de integridade (JSON)',
+            json.dumps(integrity_summary,ensure_ascii=False,indent=2).encode('utf-8'),
+            'resumo_integridade_win_v13.json','application/json',use_container_width=True)
+        with st.expander('🔍 Conferir CSV de qualidade por dia da v1.2 (opcional)'):
+            st.caption('Envie o CSV do relatório anterior apenas para conferir se os registros diários batem com os candles. Não precisa reenviá-lo para usar as outras abas.')
+            old_quality=st.file_uploader('CSV qualidade_por_dia_win_v12.csv',type=['csv'],key='old_quality_v13')
+            if old_quality is not None:
+                try:
+                    qa=pd.read_csv(old_quality)
+                    compare, diff=compare_daily_export(qa,historical_daily)
+                    if compare['comparacao_estrutural_ok']:
+                        st.success(f"{compare['linhas_csv']} dias conferidos: nenhuma divergência estrutural. Origem ainda não autenticada.")
+                    else:
+                        st.warning(f"Encontradas {compare['datas_divergentes']} datas com diferenças. Baixe o relatório para investigar.")
+                        st.dataframe(diff.head(20),use_container_width=True,hide_index=True)
+                        st.download_button('Baixar diferenças (CSV)',diff.to_csv(index=False).encode('utf-8-sig'),
+                                           'divergencias_qualidade_v13.csv','text/csv',use_container_width=True)
+                except (ValueError,TypeError,pd.errors.ParserError,UnicodeError) as exc:
+                    st.error('Não foi possível comparar o CSV: '+str(exc))
+        st.divider()
         chosen=st.selectbox('Filtrar pregões por problema',[
             'Dias com alerta','Todos os pregões','Lacunas internas','Abertura divergente',
             'Vencimento nominal','Proximidade de vencimento','Sem alertas locais'
-        ],key='quality_filter_v12')
+        ],key='quality_filter_v13')
         if chosen=='Lacunas internas':
             selection=triage[triage.lacunas_internas>0]
         elif chosen=='Abertura divergente':
@@ -635,4 +708,4 @@ with tab_data:
     st.caption('A v1.1 não baixa dados de terceiros, não verifica licenças, não acessa cotações ao vivo e não envia ordens. Resultado retrospectivo não prevê acertos futuros.')
 
 st.divider()
-st.caption('Trader Pro AI Elite · v1.2 · Simulador de pesquisa. Horários de referência B3 para 2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')
+st.caption('Trader Pro AI Elite · v1.3 · Simulador de pesquisa. Horários de referência B3 para 2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')
