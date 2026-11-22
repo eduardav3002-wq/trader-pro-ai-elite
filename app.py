@@ -1,4 +1,8 @@
-"""Trader Pro AI Elite v0.4 — Streamlit, pesquisa sem corretora nem ordens."""
+"""Trader Pro AI Elite v0.5 — pesquisa sem corretora nem ordens."""
+import hashlib
+import io
+import json
+
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -7,7 +11,7 @@ from audit import audit_trades
 from backtest import backtest
 from engine import analyze, demo_data
 
-st.set_page_config(page_title='Trader Pro AI Elite · v0.4',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
+st.set_page_config(page_title='Trader Pro AI Elite · v0.5',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
 st.markdown('''<style>
 .stApp{background:#080e1a;color:#e9f0fb}.block-container{max-width:1250px;padding:1rem 1rem 3rem}
 header[data-testid="stHeader"]{background:transparent}
@@ -27,39 +31,68 @@ section[data-testid="stSidebar"]{background:#101a2b}
 @media(max-width:640px){.block-container{padding:.8rem .7rem 2rem}.hero{padding:16px}.signal{padding:14px}}
 </style>''',unsafe_allow_html=True)
 
-st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V0.4</div>
+st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V0.5</div>
 <div class="hero-title">◈ TRADER PRO AI ELITE</div>
 <div class="hero-sub">WIN · Intraday · Filtros EMA 9/21, RSI 14, ATR 14 e tendência 15m</div>
 <span class="pill">● MODO PESQUISA — SEM ORDENS REAIS</span></div>''',unsafe_allow_html=True)
 st.caption('Modelo de regras experimentais: não é inteligência artificial treinada nem previsão de ganhos. Mercado ao vivo e execução continuam desligados.')
 with st.sidebar:
     st.header('⚙️ Central de controle')
-    source=st.radio('Fonte dos dados',['Demonstração fictícia','CSV histórico'],index=0)
+    source=st.radio('Fonte dos dados',['Demonstração fictícia','CSV histórico · origem declarada'],index=0)
     chart_bars=st.slider('Candles no gráfico',30,180,75,15)
     show_ema=st.toggle('Exibir médias móveis',True)
     st.divider()
-    st.caption('CSV histórico precisa de OHLC de 5 minutos do WIN. Datas sem fuso são interpretadas em Brasília. O programa NÃO autentica os dados.')
+    st.caption('Para usar histórico: candles de 5 min de um contrato WIN específico, dias completos de 2026 e horário de Brasília. Origem declarada NÃO significa autenticidade verificada.')
 
 out=None
-if source=='CSV histórico':
-    uploaded=st.file_uploader('Carregue candles do WIN (não o CSV de operações)',type=['csv'],key='candles',help='datetime,open,high,low,close[,volume] · horários de abertura em Brasília')
+provenance=None
+contract=None
+if source.startswith('CSV histórico'):
+    st.subheader('📁 Dados históricos: origem declarada')
+    st.caption('Não fornecemos nem autenticamos preços da B3. O usuário precisa obter OHLC de um fornecedor licenciado, com o contrato e o fuso corretos. A declaração é registrada, mas NÃO é prova de autenticidade.')
+    uploaded=st.file_uploader('Carregue o CSV de candles do WIN (não o CSV de operações)',
+                              type=['csv'],key='candles',
+                              help='datetime,open,high,low,close[,volume]; 5 minutos, abertura, Brasília')
+    f1,f2=st.columns(2)
+    with f1:
+        provider=st.text_input('Fonte declarada',placeholder='Ex.: plataforma da minha corretora',
+                               help='Informe onde obteve o arquivo histórico.')
+    with f2:
+        contract_input=st.text_input('Contrato específico',placeholder='Ex.: WINZ26',
+                                    help='Não use o símbolo contínuo WIN ou preço de índice à vista.')
+    confirmed=st.checkbox('Confirmo que o arquivo foi exportado de uma fonte histórica identificável; não é um CSV gerado pela demonstração.')
     if uploaded is None:
-        st.info('Para analisar o WIN, envie um CSV histórico com candles OHLC reais de 5 minutos. O CSV de operações v0.3 pode ser enviado na aba Auditoria.')
+        st.info('Para analisar o WIN, envie CSV de candles reais, com fonte e contrato declarados.')
+    elif not (provider.strip() and contract_input.strip() and confirmed):
+        st.warning('Preencha a fonte, o contrato e a confirmação. Sem isso, o motor não executa análise histórica.')
     else:
         try:
-            raw=pd.read_csv(uploaded)
-            out=analyze(raw)
-            st.info('Arquivo submetido à validação técnica. Fonte e autenticidade dos preços NÃO verificadas; sessões especiais e feriados exigem confirmação externa.')
+            payload=uploaded.getvalue()
+            if len(payload) > 15_000_000:
+                raise ValueError('CSV maior que 15 MB. Envie uma amostra de 2026 menor.')
+            contract=contract_input.strip().upper()
+            raw=pd.read_csv(io.BytesIO(payload))
+            out=analyze(raw,contract=contract)
+            provenance={'tipo':'HISTORICO_DECLARADO_NAO_VERIFICADO','fonte_declarada':provider.strip(),
+                        'contrato':contract,'nome_arquivo':uploaded.name,
+                        'sha256_csv':hashlib.sha256(payload).hexdigest(),
+                        'primeiro_candle':str(out.datetime.iloc[0]),
+                        'ultimo_candle':str(out.datetime.iloc[-1]),
+                        'total_candles':len(out)}
+            st.warning('CSV validado estruturalmente, mas preços, origem e integridade de mercado NÃO foram verificados de forma independente.')
+            st.caption(f"Contrato: {contract} · Fonte declarada: {provider.strip()} · SHA-256: {provenance['sha256_csv'][:16]}…")
         except (ValueError,TypeError,pd.errors.ParserError,UnicodeError) as exc:
             st.error(f'CSV rejeitado: {exc}')
 else:
     try:
         out=analyze(demo_data())
+        provenance={'tipo':'DEMONSTRACAO_FICTICIA','fonte_declarada':'Gerador sintético local',
+                    'contrato':'NENHUM','sha256_csv':None,'total_candles':len(out)}
     except (ValueError,TypeError) as exc:
         st.error(f'Erro na demonstração: {exc}')
-    st.warning('DEMONSTRAÇÃO 100% FICTÍCIA: nem candles nem resultados representam o mercado real da B3.')
+    st.warning('DEMONSTRAÇÃO 100% FICTÍCIA: candles e operações são INVENTADOS. Não avaliam eficácia no mercado.')
 
-tab_terminal,tab_bt,tab_audit=st.tabs(['📈 Terminal de sinais','🧪 Backtesting','🛡️ Auditoria v0.3'])
+tab_terminal,tab_bt,tab_audit,tab_data=st.tabs(['📈 Terminal de sinais','🧪 Backtesting','🛡️ Auditoria v0.3','🔐 Dados e origem'])
 
 with tab_terminal:
     if out is None:
@@ -74,7 +107,7 @@ with tab_terminal:
         elif last['condition']=='POSSÍVEL LATERALIZAÇÃO':
             reason.append('As médias móveis estão próximas: possível lateralização.')
         elif signal=='AGUARDAR':
-            reason.append('Os filtros de tendência 5m/15m, RSI e rompimento não estão alinhados. NÃO OPERAR.')
+            reason.append('Um ou mais filtros de tendência, RSI ou rompimento falharam. NÃO OPERAR.')
         else:
             reason.append('Tendência 5m/15m, RSI e rompimento de três candles estão alinhados no modelo experimental.')
         st.markdown(f'''<div class="signal" style="border-left:5px solid {palette[signal]}"><div class="muted">STATUS DO ÚLTIMO CANDLE · HISTÓRICO</div>
@@ -102,6 +135,7 @@ with tab_terminal:
             st.write('• Tendência EMA 9/21: **'+str(last['trend'])+'**')
             st.write('• Tendência dos candles completos 15m: **'+str(last['trend15'])+'**')
             st.write('• Condição de mercado: **'+str(last['condition'])+'**')
+            st.write('• Motivo técnico: **'+str(last['reason_code'])+'**')
             st.caption('Esse motor não calcula probabilidade estatística de acerto.')
         with st.expander('🎯 Níveis ilustrativos de ATR'):
             if signal=='AGUARDAR':
@@ -118,7 +152,7 @@ with tab_terminal:
 
 with tab_bt:
     st.write('Backtest histórico com validação rigorosa. **Nunca confunda resultado retrospectivo com probabilidade futura.**')
-    st.caption('Entrada na abertura do candle seguinte, até 17:55; stop tem prioridade, limite 3 operações/dia por padrão, zeragem até 18:15. 1 contrato por operação para interpretação de pontos.')
+    st.caption('Entrada na abertura seguinte até 17:55; exige pregões completos; stop tem prioridade no mesmo candle, limite de 3 operações/dia e zeragem até 18:15; ignora o vencimento do contrato informado.')
     if out is None:
         st.info('Envie candles válidos ou escolha demonstração fictícia para liberar o backtest.')
     else:
@@ -131,11 +165,11 @@ with tab_bt:
             max_hold=st.number_input('Duração máxima (candles de 5 min)',min_value=1,max_value=100,value=12,step=1)
             daily_loss=st.number_input('Limite de perda líquida diária (pontos)',min_value=0.0,value=200.0,step=25.0)
         st.caption(f'Exemplo de fricção: {cost:.1f} pts de taxas + {2*slip*5} pts de slippage por operação; isto é uma hipótese, não preço de corretora.')
-        run=st.button('Executar backtest v0.4',type='primary',use_container_width=True)
+        run=st.button('Executar backtest v0.5',type='primary',use_container_width=True)
         if run:
             try:
                 trades=backtest(out,cost_points=cost,max_hold=int(max_hold),slippage_ticks=int(slip),
-                                max_daily_trades=int(daily_limit),max_daily_loss_points=daily_loss)
+                                max_daily_trades=int(daily_limit),max_daily_loss_points=daily_loss,contract=contract)
                 if source=='Demonstração fictícia':
                     st.warning('Resultado abaixo é exclusivamente de preços INVENTADOS. Não mede eficácia no mercado WIN.')
                 if trades.empty:
@@ -151,9 +185,26 @@ with tab_bt:
                     c3.metric('Saldo líquido',f'{net:+.1f} pts')
                     c4.metric('Drawdown (do zero)',f'{dd:.1f} pts')
                     st.line_chart(equity,y_label='Pontos acumulados · inicia em zero')
+                    gain=float(trades.loc[trades.net_points.gt(0),'net_points'].sum())
+                    loss=-float(trades.loc[trades.net_points.lt(0),'net_points'].sum())
+                    pf=(gain/loss if loss>0 else float('nan'))
+                    st.caption(f'Profit factor: {pf:.2f}' if loss else 'Profit factor: indefinido (sem perdas na amostra)')
+                    if len(trades)<100: st.warning('Amostra com menos de 100 operações: métricas muito instáveis. Não há evidência de vantagem estatística.')
                     st.dataframe(trades,use_container_width=True,hide_index=True)
-                    st.download_button('Baixar operações v0.4 (CSV)',trades.to_csv(index=False).encode('utf-8-sig'),
-                                       'backtest_trader_pro_ai_elite_v04.csv','text/csv',use_container_width=True)
+                    exported=trades.copy()
+                    exported['tipo_dado']=provenance['tipo']
+                    exported['contrato_declarado']=provenance.get('contrato','NENHUM')
+                    exported['sha256_csv_origem']=provenance.get('sha256_csv')
+                    st.download_button('Baixar operações v0.5 (CSV)',exported.to_csv(index=False).encode('utf-8-sig'),
+                                       'backtest_trader_pro_ai_elite_v05.csv','text/csv',use_container_width=True)
+                    config={'custo_pontos':cost,'slippage_ticks_por_lado':int(slip),
+                            'max_operacoes_dia':int(daily_limit),'max_hold_candles':int(max_hold),
+                            'limite_perda_diaria_pontos':daily_loss}
+                    st.download_button('Baixar relatório de origem e parâmetros (JSON)',
+                                       json.dumps({'versao':'0.5','dados':provenance,'parametros':config,
+                                                   'total_operacoes':len(trades),'saldo_pontos':net},
+                                                  ensure_ascii=False,indent=2).encode('utf-8'),
+                                       'relatorio_origem_v05.json','application/json',use_container_width=True)
                     st.caption('Pontos, não reais. Valor teórico de cada ponto WIN: R$0,20 por contrato; tributação, corretora e liquidez reais não foram verificadas.')
             except (ValueError,TypeError) as exc:
                 st.error(f'Não foi possível executar: {exc}')
@@ -178,5 +229,13 @@ with tab_audit:
             st.error(f'Não foi possível auditar: {exc}')
     st.caption('A auditoria checa requisitos básicos; não comprova origem, integridade ou qualidade do backtest.')
 
+with tab_data:
+    st.subheader('🔐 Origem e limitações da amostra')
+    if provenance:
+        st.json(provenance)
+        st.info('SHA-256 identifica os bytes do arquivo carregado. Não comprova se as cotações são reais, corretas ou completas no fornecedor.')
+    st.markdown('''**Para um backtest histórico comparável:** exporte candles OHLC de 5 minutos de um único vencimento do WIN em 2026, com data/hora de abertura no fuso de Brasília, pregões completos e sem gaps. Declare a origem e o ticker da série (ex.: WINZ26). Um CSV de operações não substitui candles.''')
+    st.caption('A v0.5 não baixa dados de terceiros, não verifica licenças, não acessa cotações ao vivo e não envia ordens. Resultado retrospectivo não prevê acertos futuros.')
+
 st.divider()
-st.caption('Trader Pro AI Elite · v0.4 · Simulador de pesquisa. Horários de referência B3 em nov/2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')
+st.caption('Trader Pro AI Elite · v0.5 · Simulador de pesquisa. Horários de referência B3 em nov/2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')

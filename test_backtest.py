@@ -26,7 +26,7 @@ def test_backtest():
     # Drawdown precisa começar com patrimônio zero.
     e=pd.concat([pd.Series([0.]),trades.net_points.cumsum().reset_index(drop=True)],ignore_index=True)
     assert float((e-e.cummax()).min())<=0
-    return trades
+
 
 
 def test_audit_old():
@@ -41,6 +41,19 @@ def test_audit_old():
 
 
 if __name__=='__main__':
-    trades=test_backtest()
+    test_backtest()
     test_audit_old()
-    print(f'OK: backtest, risco, slippage, sessão e auditoria ({len(trades)} trades fictícios)')
+    count = len(backtest(analyze(demo_data())))
+    print(f'OK: backtest, risco, slippage, sessão e auditoria ({count} trades fictícios)')
+
+
+def test_reject_partial_sessions():
+    from engine import analyze
+    # A análise do candle pode funcionar; o backtest precisa de pregões fechados.
+    partial = analyze(demo_data().iloc[1:].reset_index(drop=True),contract='WINZ26')
+    try:
+        backtest(partial, contract='WINZ26')
+    except ValueError as exc:
+        assert 'Pregão incompleto' in str(exc)
+    else:
+        raise AssertionError('Backtest de pregão incompleto deve ser bloqueado.')

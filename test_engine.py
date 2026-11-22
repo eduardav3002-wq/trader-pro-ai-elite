@@ -58,3 +58,43 @@ def test_no_future_15m():
 if __name__=='__main__':
     test_demo_and_rules();test_invalid();test_no_future_15m()
     print('OK: validação, calendário e prevenção de look-ahead')
+
+
+def test_contract_and_full_sessions():
+    from engine import contract_expiry
+    assert str(contract_expiry('WINZ26')) == '2026-12-16'
+    assert str(contract_expiry('WINV26')) == '2026-10-14'
+    d = demo_data()
+    assert len(validate_win_candles(d, require_complete_sessions=True, contract='WINZ26')) == 452
+    try:
+        validate_win_candles(d, contract='WINV26')
+    except ValueError as exc:
+        assert 'posteriores ao vencimento' in str(exc)
+    else:
+        raise AssertionError('Datas posteriores ao vencimento devem ser rejeitadas.')
+    try:
+        validate_win_candles(d.iloc[1:].reset_index(drop=True),
+                             require_complete_sessions=True, contract='WINZ26')
+    except ValueError as exc:
+        assert 'Pregão incompleto' in str(exc)
+    else:
+        raise AssertionError('Sessão sem primeiro candle deve ser rejeitada.')
+    try:
+        contract_expiry('WIN_CONTINUO')
+    except ValueError:
+        pass
+    else:
+        raise AssertionError('Símbolo contínuo não deve passar como vencimento.')
+
+
+def test_symbol_declared_in_csv():
+    d = demo_data()
+    d['ticker'] = 'WINZ26'
+    validate_win_candles(d, contract='WINZ26')
+    d.loc[1, 'ticker'] = 'WINV26'
+    try:
+        validate_win_candles(d, contract='WINZ26')
+    except ValueError as exc:
+        assert 'não corresponde' in str(exc)
+    else:
+        raise AssertionError('Contratos misturados devem ser rejeitados.')

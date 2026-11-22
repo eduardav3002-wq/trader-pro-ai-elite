@@ -5,7 +5,7 @@ import math
 import pandas as pd
 import numpy as np
 
-from engine import TICK, validate_win_candles
+from engine import TICK, validate_win_candles, contract_expiry
 
 ENTRY_CUTOFF = time(17,55)  # margem antes do fechamento do pregão
 FLAT_CANDLE = time(18,10)   # saída no fechamento às 18:15, antes do call
@@ -15,7 +15,7 @@ COLUMNS = ('sinal_candle','entrada_candle','saida_candle','direcao','entrada','s
 
 
 def backtest(data, cost_points=2.0, max_hold=12, slippage_ticks=1, max_daily_trades=3,
-             max_daily_loss_points=200.0):
+             max_daily_loss_points=200.0, contract=None):
     """O custo informado equivale a pontos por operação completa, ADICIONAL ao slippage.
 
     1 tick = 5 pontos. Slippage simétrico adverso em entrada e saída.
@@ -26,12 +26,17 @@ def backtest(data, cost_points=2.0, max_hold=12, slippage_ticks=1, max_daily_tra
             raise ValueError(f'Parâmetro inválido: {key}.')
     if not (isinstance(slippage_ticks,int) and not isinstance(slippage_ticks,bool) and slippage_ticks >= 0):
         raise ValueError('Slippage em ticks deve ser um inteiro não negativo.')
-    if not (isinstance(max_hold,int) and max_hold >= 1 and isinstance(max_daily_trades,int) and max_daily_trades >= 1):
+    if not (isinstance(max_hold,int) and not isinstance(max_hold,bool) and max_hold >= 1
+            and isinstance(max_daily_trades,int) and not isinstance(max_daily_trades,bool) and max_daily_trades >= 1):
         raise ValueError('Duração e limite diário devem ser inteiros positivos.')
     required = {'datetime','open','high','low','close','signal','atr'}
     if not required.issubset(data.columns):
         raise ValueError('Execute analyze() sobre os candles antes do backtest.')
-    df = validate_win_candles(data).reset_index(drop=True)
+    # Exige todos os candles do início ao fim de cada sessão apresentada.
+    # Evita contar liquidação fictícia em um CSV cortado antes do fechamento.
+    df = validate_win_candles(
+        data, require_complete_sessions=True, contract=contract).reset_index(drop=True)
+    expiry = contract_expiry(contract) if contract else None
     records=[]
     daily = {}
     i = 34
@@ -48,6 +53,10 @@ def backtest(data, cost_points=2.0, max_hold=12, slippage_ticks=1, max_daily_tra
         if entry_dt.time()>ENTRY_CUTOFF:
             i+=1;continue
         day=entry_dt.date()
+        # No vencimento há regras especiais de settlement/horário.
+        # Excluímos todo o dia até modelarmos o vencimento explicitamente.
+        if expiry and day == expiry:
+            i+=1;continue
         d=daily.setdefault(day,{'trades':0,'net':0.0})
         if d['trades']>=max_daily_trades or d['net']<=-max_daily_loss_points:
             i+=1;continue

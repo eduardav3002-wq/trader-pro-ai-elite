@@ -1,34 +1,49 @@
-# Trader Pro AI Elite v0.4 — pesquisa e auditoria, sem ordens reais
+# Trader Pro AI Elite v0.5 — Pesquisa em WIN (sem ordens reais)
 
-Este projeto evolui o app Streamlit v0.3. É **um motor de regras determinísticas**, não uma IA treinada, não acessa dados ao vivo, não se conecta à B3/corretoras e não garante taxas de acerto.
+Aplicativo responsivo Streamlit, com interface premium de pesquisa histórica. **Não é uma IA treinada**, não tem conexão com corretora, não opera ao vivo e **não prevê a taxa de acerto futura**. O motor permanece determinístico (EMA 9/21, RSI 14, ATR 14, confirmação 15m e rompimento de três candles).
 
-## Publicação no GitHub e Streamlit (celular)
+## Instalação no GitHub pelo celular
 
-1. Baixe e **extraia** o ZIP. No seu repositório existente, envie/substitua os arquivos `app.py`, `engine.py`, `backtest.py`, `audit.py`, `requirements.txt`, `test_engine.py`, `test_backtest.py` e `README.md` na **raiz** do repositório. Não envie o ZIP como se fosse código Python.
-2. Confirme o commit. A instalação do Streamlit Cloud existente deve apontar para **`app.py`**. Se já estiver conectada ao mesmo repositório, ela geralmente fará o redeploy após o commit.
-3. Abra a aplicação e execute a demonstração fictícia para conferir a interface. Para estudar dados históricos, envie um CSV OHLC de WIN legítimo, 5 min, horário de Brasília, com as colunas abaixo. **O CSV de backtest v0.3 contém operações, não candles, e só serve para a aba de auditoria.**
+1. Baixe e **extraia** o ZIP. No repositório GitHub existente, substitua os oito arquivos da raiz: `app.py`, `engine.py`, `backtest.py`, `audit.py`, `test_engine.py`, `test_backtest.py`, `requirements.txt` e `README.md`. **Não publique só o arquivo .zip**.
+2. Confirme o *Commit changes*. Se o aplicativo já foi publicado no Streamlit Community Cloud e a implantação usa o mesmo repositório, verifique se o arquivo principal está definido como **`app.py`**; a atualização normalmente acontece após o commit.
+3. Abra o aplicativo, selecione *Demonstração fictícia* na barra lateral, e rode um teste apenas para verificar a interface.
+4. Para dados históricos, selecione *CSV histórico · origem declarada* e envie **candles reais** de fonte que você possa identificar; informe a fonte, ticker do contrato (ex.: `WINZ26`) e confirme a declaração. **O app não compra, baixa ou autentica os candles.**
 
-## Formato do CSV de candles
+## CSV histórico aceito
 
-`datetime,open,high,low,close,volume` (volume opcional). Um candle por linha com data/hora de **abertura** no formato `2026-11-20 09:00:00`, em horário de Brasília. Também aceita alguns cabeçalhos em português e timestamps com offset de fuso. Ordenar em ordem crescente.
+Colunas: `datetime,open,high,low,close,volume` (volume opcional). Timestamps são da **abertura** de cada candle de cinco minutos no horário de Brasília; sem offset são interpretados como BRT. Exemplo de formato: `2026-11-19 09:00:00`.
 
-## Mudanças da v0.4
+Este protótipo restringe a validação a **2026** porque só tem calendário codificado para esse ano; valida 5 pontos por tick, consistência OHLC, sequência temporal, feriados conhecidos, horário regular e prazo de vencimento **nominal** do contrato. O contrato contínuo `WIN` não é aceito para a amostra histórica: é necessário declarar um vencimento específico, por exemplo `WINZ26` (dez/2026). No dia do vencimento, o contrato vincendo encerra a negociação antecipadamente; por precaução a v0.5 **não faz operações nesse dia**.
 
-- Grade de **5 pontos por preço** do contrato WIN, OHLC consistente, candles exatos de 5 minutos e pregão regular: rejeição explícita de dados incoerentes, sem arredondamento silencioso.
-- Demonstração fictícia gerada apenas entre 09:00 e 18:20 em dias úteis de pregão, com preços válidos de 5 pontos; não gera candles no feriado de 20/11/2026. **Simulação fictícia não indica desempenho real.**
-- Confirmação real de tendência com **candles completos de 15 minutos** — sem uso antecipado de um candle ainda aberto — e rompimento de três candles anteriores.
-- Entrada ao abrir o candle seguinte, uma posição por vez, stop prioritário se alta/baixa tocar stop e alvo no mesmo candle, gaps desfavoráveis respeitados.
-- Entrada até 17:55; liquidação do que restar até o fechamento do candle das 18:10 (18:15); não atravessa pregões.
-- Tick no stop/alvo, slippage adverso na entrada/saída e taxas separadas; horário exato de toque intrabar é explicitamente desconhecido; limite de operações diárias e de perda diária em pontos; drawdown com capital inicial de 0.
-- Aba de auditoria para verificar registros da versão antiga sem reescrever seus resultados.
+Para habilitar o *backtest*, cada dia que aparece no CSV deve estar **completo**. Para um dia normal: abertura do primeiro candle às **09:00**, último às **18:20**, sem lacunas (113 candles). O pregão especial de 18/02/2026 e o horário do contrato no vencimento têm regras diferenciadas. A análise no terminal pode aceitar uma amostra parcial válida, mas o backtest irá rejeitá-la. Isso impede o modelo de contabilizar um fechamento fictício quando faltam candles.
 
-## Observações e limitações
+**Atenção:** a grade e os horários são referência para 2026 e não incluem todas as exceções históricas, suspensões, leilões, eventos e alterações oficiais. O simples fato de passar na validação **NÃO prova que um arquivo veio da B3**, nem que seus preços são autênticos. Preços inventados podem obedecer à grade. Dados de vencimentos diferentes, séries contínuas ajustadas ou exportações com fuso incorreto podem distorcer resultados. O usuário precisa verificar os dados e a licença de seu provedor.
 
-A grade 09:00–18:25 é uma referência de negociação **regular** para nov/2026. Não cobre todos os feriados, eventos, leilões, vencimentos e alterações históricas de horário da B3. O validador **não certifica a autenticidade** do CSV (um arquivo sintético pode obedecer à grade). Faltam ainda fonte independente de dados históricos, calendário oficial de sessões/vencimento, custos da corretora, bid/ask, ajustes de contrato, análise fora da amostra, análise por regime e validação estatística. O slippage configurado é uma hipótese constante, não uma estimativa de liquidez real.
+## Mudanças da v0.5
 
-Para estudos comparáveis, registre os parâmetros antes de testar, separe períodos de desenvolvimento e avaliação, e evite ajustes guiados pelo mesmo resultado. Não use estes sinais para operar dinheiro real.
+- Identifica a demonstração sintética de forma inequívoca; ela nunca é apresentada como desempenho de mercado.
+- Exige **fonte declarada**, **contrato específico** e confirmação antes da análise de CSV histórico. A fonte é **declarada, não auditada**.
+- Salva hash **SHA-256 do arquivo** no relatório de origem e na exportação das operações (ajuda a reproduzir o estudo; **não certifica autenticidade**).
+- Verifica o vencimento nominal do contrato informado e impede dados pós-vencimento; exclui operações no dia do vencimento.
+- Recusa backtests de dias parciais, evitando fechamento artificial por ausência de dados.
+- Exibe *profit factor*, alerta para amostras pequenas e registra condições para sinal `AGUARDAR` / **NÃO OPERAR**.
+- Mantém gestão conservadora: posição única, entrada na abertura seguinte, stop prioritário quando stop/alvo são tocados no mesmo candle, slippage adverso dos dois lados, custos separados, máximo de 3 operações/dia por padrão e limite diário de perdas **realizadas**. O limite não é garantido em perdas intratrade ou por gaps.
 
-**B3 — dados de referência:**
-- https://www.b3.com.br/pt_br/produtos-e-servicos/negociacao/renda-variavel/futuro-mini-de-ibovespa.htm
-- https://www.b3.com.br/pt_br/solucoes/plataformas/puma-trading-system/para-participantes-e-traders/horario-de-negociacao/derivativos/indices/
-- https://www.b3.com.br/pt_br/noticias/calendario-de-negociacao-da-b3-confira-o-funcionamento-da-bolsa-em-2026.htm
+## Como executar testes
+
+```bash
+pip install -r requirements.txt
+python -m pytest -q test_engine.py test_backtest.py
+streamlit run app.py
+```
+
+Os testes usam preços gerados artificialmente: verificam integridade do código, **não** desempenho da estratégia. A amostra fictícia v0.4 tinha 10 operações e saldo líquido negativo; isso não mede o mercado real.
+
+## Limitações para próximos ciclos
+
+Obter dados históricos reais de fonte com permissão, validar sessões e vencimentos com calendário atualizado, verificar múltiplos períodos e regimes, fazer validação fora da amostra, modelar custos e liquidez reais, estimar incerteza e comparar com estratégias ingênuas. Nenhuma otimização deve ser feita olhando repetidamente para o mesmo período de avaliação. O aplicativo não está habilitado para investimentos ou operações reais.
+
+Fontes oficiais B3:
+- [Especificação do WIN (tick e vencimentos)](https://www.b3.com.br/pt_br/produtos-e-servicos/negociacao/renda-variavel/futuro-mini-de-ibovespa.htm)
+- [Horários dos derivativos de índices](https://www.b3.com.br/pt_br/solucoes/plataformas/puma-trading-system/para-participantes-e-traders/horario-de-negociacao/derivativos/indices/)
+- [Calendário de negociação de 2026](https://www.b3.com.br/pt_br/noticias/calendario-de-negociacao-da-b3-confira-o-funcionamento-da-bolsa-em-2026.htm)
