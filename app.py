@@ -1,4 +1,4 @@
-"""Trader Pro AI Elite v1.0 — pesquisa mobile-first, sem corretora nem ordens."""
+"""Trader Pro AI Elite v1.1 — pesquisa mobile-first, sem corretora nem ordens."""
 import json
 
 import pandas as pd
@@ -10,14 +10,15 @@ from backtest import backtest
 from research import robustness_report
 from validation import chronological_validation
 from provenance import inspect_historical_csv
+from historical import audit_exploratory_csv, historical_day_gate, CLOSED_2019, CLOSED_2020, CALENDAR_SOURCES
 from engine import analyze, demo_data, HOLIDAYS_2026, market_day_gate, signal_entry_gate, ENTRY_GATE_LABELS
 
-st.set_page_config(page_title='Trader Pro AI Elite · v1.0',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
+st.set_page_config(page_title='Trader Pro AI Elite · v1.1',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
 st.markdown("""<style>
 :root {color-scheme:dark}
 .stApp{background:radial-gradient(ellipse at 100% 0%,#1f173f 0%,#0c1020 35%,#080c16 72%);color:#edf1ff}
 /* Reduz controles flutuantes nativos quando embutidos no navegador móvel. */
-.block-container{max-width:1160px;padding:3.5rem 1rem 3.4rem}
+.block-container{max-width:1160px;padding:5.0rem 1rem 3.4rem}
 html{scroll-padding-top:5rem}
 [data-testid="stHeader"]{background:#0b0d19dd!important}
 [data-testid="stToolbar"], [data-testid="stDecoration"]{display:none!important}
@@ -44,7 +45,7 @@ section[data-testid="stSidebar"]{background:#11162a}
 .signal strong{font-size:1.55rem}.muted{color:#b2bed5;font-size:.88rem}
 .micro-note{color:#c2c3db;font-size:.8rem}
 @media(max-width:640px){
- .block-container{padding:4.2rem .65rem 2.4rem}
+ .block-container{padding:6.8rem .65rem 2.4rem}
  .hero{padding:19px 15px;border-radius:17px}
  .hero-title{font-size:1.7rem}
  .hero-sub{font-size:.8rem}
@@ -59,29 +60,33 @@ section[data-testid="stSidebar"]{background:#11162a}
 }
 </style>""",unsafe_allow_html=True)
 
-st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V1.0</div>
+st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V1.1</div>
 <div class="hero-title">◈ TRADER PRO AI ELITE</div>
 <div class="hero-sub">WIN · Intraday · Filtros EMA 9/21, RSI 14, ATR 14 e tendência 15m</div>
 <span class="pill">● PESQUISA SEGURA · ORDENS DESATIVADAS</span></div>''',unsafe_allow_html=True)
-st.caption('v1.0 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
+st.caption('v1.1 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
 st.markdown('### 📁 Escolha como analisar')
-source = st.radio('Fonte dos candles', ['Demonstração fictícia', 'CSV histórico · origem declarada'], index=0, horizontal=False, label_visibility='collapsed')
-st.caption('Demonstração = números inventados. CSV = validação estrutural rigorosa, mas origem não autenticada.')
+source = st.radio('Fonte dos candles', ['Demonstração fictícia', 'CSV histórico 2026 · origem declarada', '🔬 Explorar 2019–2020 · SEM backtest'], index=0, horizontal=False, label_visibility='collapsed')
+st.caption('Demonstração = dados fictícios. Histórico 2026 = validação estrita por contrato. Explorar 2019–2020 = auditoria sem sinais/backtest.')
 with st.sidebar:
     st.header('⚙️ Central de controle')
     chart_bars=st.slider('Candles no gráfico',30,180,75,15)
     show_ema=st.toggle('Exibir médias móveis',True)
     profile_ui=st.radio('Perfil de pesquisa',
-                        ['Seletivo v1.0 (experimental)','Base v0.5 (comparação)'],index=0)
+                        ['Seletivo v1.1 (experimental)','Base v0.5 (comparação)'],index=0)
     profile='seletivo' if profile_ui.startswith('Seletivo') else 'base'
     st.caption('Seletivo aplica filtros de volatilidade/candles. Valores escolhidos para demonstrar regras, NÃO ajustados ao WIN real.')
     st.divider()
     st.caption('CALENDÁRIO B3: feriados e fins de semana bloqueados. Esta versão valida apenas o calendário de 2026 e rejeita anos não certificados.')
-    st.caption('Histórico: candles de 5 min de um contrato WIN específico, dias completos e consecutivos em 2026, horário de Brasília. Origem NÃO autenticada.')
+    st.caption('Modo rigoroso: contrato WIN específico e dias completos de 2026. Modo exploratório 2019–2020: apenas qualidade de dados, sem gerar operações.')
 
 out=None
 provenance=None
 contract=None
+historical_report=None
+historical_daily=None
+historical_gaps=None
+historical_candles=None
 if source.startswith('CSV histórico'):
     st.subheader('📁 Importação histórica — dados fornecidos pelo usuário')
     st.info('Obtenha o CSV de uma plataforma/fornecedor que tenha direito de fornecer WIN intraday. O app não busca dados da B3 automaticamente e não pode verificar a origem externa.')
@@ -108,10 +113,28 @@ if source.startswith('CSV histórico'):
             out=analyze(checked,contract=contract,profile=profile)
             st.warning('Estrutura e continuidade aprovadas. COTAÇÕES NÃO AUTENTICADAS: o aplicativo não consegue atestar que preços existiram na B3.')
             st.caption(f"Contrato: {contract} · {provenance['pregoes_completos']} pregões inteiros · SHA-256: {provenance['sha256'][:16]}…")
-            st.download_button('⬇️ Baixar comprovante de triagem JSON', json.dumps(provenance,ensure_ascii=False,indent=2).encode('utf-8'), 'triagem_win_v10.json', 'application/json', use_container_width=True)
+            st.download_button('⬇️ Baixar comprovante de triagem JSON', json.dumps(provenance,ensure_ascii=False,indent=2).encode('utf-8'), 'triagem_win_v11.json', 'application/json', use_container_width=True)
         except (ValueError,TypeError,pd.errors.ParserError,UnicodeError) as exc:
             st.error(f'CSV rejeitado: {exc}')
             st.caption('Confira: contrato específico, horário de abertura em Brasília, todos os candles de cada sessão e pregões consecutivos.')
+elif source.startswith('🔬 Explorar'):
+    st.subheader('🔬 Histórico 2019–2020: auditoria de qualidade')
+    st.warning('MODO EXPLORATÓRIO — nenhuma operação, sinal, lucro ou backtest é gerado. Ticker, rolagem, fusos e origem primária permanecem não verificados.')
+    st.caption('Aceita o data.csv ORIGINAL (TSV de 1 minuto) ou WIN_2019_2020_5min_exploratorio.csv. Se receber 1 minuto, converte apenas blocos de 5 minutos completos; não preenche lacunas.')
+    historic_upload=st.file_uploader('Envie o CSV/TSV histórico gratuito',type=['csv','tsv','txt'],key='historic_2019_2020')
+    historic_source=st.text_input('Fonte declarada do arquivo',value='GitHub — FGV_Trabalho_WIN (origem primária não verificada)',key='historic_source')
+    if historic_upload is None:
+        st.info('Toque em Upload e escolha o arquivo que já baixamos. A análise fica na aba 🔬 Histórico.')
+    else:
+        try:
+            historical_candles,historical_report,historical_daily,historical_gaps=audit_exploratory_csv(
+                historic_upload.getvalue(),historic_source,historic_upload.name)
+            st.success(f"Arquivo lido para auditoria: {historical_report['candles_5min']:,} candles em {historical_report['pregoes_com_dados']} dias (não autenticados).".replace(',','.'))
+            if historical_report['dias_com_lacunas'] or historical_report['dias_abertura_divergente']:
+                st.warning('Há lacunas ou aberturas divergentes; os dias NÃO foram certificados como pregões completos.')
+            st.caption('SHA-256 recebido: ' + historical_report['sha256_recebido'][:24] + '…')
+        except (ValueError,TypeError,pd.errors.ParserError,UnicodeError) as exc:
+            st.error(f'Arquivo exploratório rejeitado: {exc}')
 else:
     try:
         out=analyze(demo_data(),profile=profile)
@@ -122,11 +145,65 @@ else:
         st.error(f'Erro na demonstração: {exc}')
     st.warning('DEMONSTRAÇÃO 100% FICTÍCIA: candles e operações são INVENTADOS. Não avaliam eficácia no mercado.')
 
-tab_terminal,tab_decision,tab_bt,tab_robust,tab_audit,tab_data=st.tabs(['📈 Sinais','🛑 Não operar','🧪 Backtest','🧬 Robustez','🛡️ Auditoria','🔐 Dados'])
+tab_historic,tab_terminal,tab_decision,tab_bt,tab_robust,tab_audit,tab_data=st.tabs(['🔬 Histórico','📈 Sinais','🛑 Não operar','🧪 Backtest','🧬 Robustez','🛡️ Auditoria','🔐 Dados'])
+
+with tab_historic:
+    st.subheader('🔬 Auditoria histórica 2019–2020')
+    st.caption('Este laboratório só descreve o arquivo recebido; não usa os preços para emitir COMPRA/VENDA nem calcula resultados de investimento.')
+    if historical_report is None:
+        st.info('Selecione “🔬 Explorar 2019–2020” e carregue o CSV original ou o convertido para gerar a auditoria.')
+    else:
+        r=historical_report
+        c1,c2=st.columns(2)
+        c1.metric('Candles íntegros 5m',f"{r['candles_5min']:,}".replace(',','.'))
+        c2.metric('Pregões observados',r['pregoes_com_dados'])
+        c1.metric('Dias com lacunas',r['dias_com_lacunas'])
+        c2.metric('Dias com abertura divergente',r['dias_abertura_divergente'])
+        c1.metric('Saltos internos 5m',r['saltos_intradiarios_5min'])
+        c2.metric('Pregões inteiros ausentes',r['pregoes_ausentes'])
+        st.warning('🛑 CONTRATO NÃO IDENTIFICADO · ORIGEM NÃO AUTENTICADA · BACKTEST BLOQUEADO. Mesmo dias sem saltos podem estar incompletos nas extremidades.')
+        st.markdown('**Datas de vencimento nominal na amostra**')
+        st.write(', '.join(r['vencimentos_nominais_na_amostra']) or 'Nenhuma')
+        st.caption('São datas de atenção à rolagem, NÃO evidência de que o CSV trocou de contrato ou corrigiu preços.')
+        if r['conversao']['tipo_entrada']=='TSV_1MIN':
+            st.info(f"Conversão interna 1m → 5m: {r['conversao']['janelas_parciais_descartadas']} janelas incompletas descartadas; nenhum valor criado ou interpolado.")
+        if r['pregoes_ausentes']:
+            st.error('Datas esperadas sem registros: '+ ', '.join(r['pregoes_esperados_ausentes'][:12]))
+        st.subheader('📱 Dias com alertas: lista legível no celular')
+        flagged=historical_daily[(historical_daily.lacunas_internas>0) |
+                    (historical_daily.primeiro_candle!=historical_daily.abertura_referencia) |
+                    historical_daily.alertas.str.contains('VENCIMENTO',na=False)]
+        st.caption(f'{len(flagged)} dias com algum alerta específico. Cada dia observado ainda exige confirmação de encerramento e origem.')
+        for rec in flagged.head(25).to_dict('records'):
+            with st.container(border=True):
+                st.markdown('**'+rec['dia']+'**')
+                st.write(f"{rec['candles_5min']} candles · {rec['primeiro_candle']} até {rec['ultimo_candle']} · {rec['lacunas_internas']} lacuna(s)")
+                st.caption(rec['alertas'].replace('; ',' · '))
+        if len(flagged)>25:
+            st.caption(f'Mostrando os primeiros 25 de {len(flagged)} dias com alerta. Baixe o relatório completo abaixo.')
+        with st.expander('Ver todos os dias e os saltos em tabela'):
+            st.dataframe(historical_daily,use_container_width=True,hide_index=True)
+            if not historical_gaps.empty:
+                st.dataframe(historical_gaps,use_container_width=True,hide_index=True)
+        st.download_button('⬇️ Baixar relatório exploratório (JSON)',
+            json.dumps(r,ensure_ascii=False,indent=2).encode('utf-8'),
+            'auditoria_exploratoria_win_v11.json','application/json',use_container_width=True)
+        st.download_button('⬇️ Baixar qualidade por dia (CSV)',
+            historical_daily.to_csv(index=False).encode('utf-8-sig'),
+            'qualidade_por_dia_win_v11.csv','text/csv',use_container_width=True)
+        st.download_button('⬇️ Baixar lacunas internas (CSV)',
+            historical_gaps.to_csv(index=False).encode('utf-8-sig'),
+            'lacunas_win_v11.csv','text/csv',use_container_width=True)
+        st.caption('Dados do usuário, horários de Brasília DECLARADOS (não comprovados). Não confundir ausência de pregões inteiros com ausência de lacunas intradiárias.')
+    st.markdown('**Calendário histórico: fontes**')
+    st.markdown('\n'.join([f"- [B3: calendário de 2019]({CALENDAR_SOURCES['2019']})",
+                            f"- [B3: calendário de 2020]({CALENDAR_SOURCES['2020']})",
+                            f"- [B3: exceções de 2020]({CALENDAR_SOURCES['2020_excecoes']})"]))
+    st.caption('Exceções 2020: 11/06 fechado; 09/07 e 20/11 abertos; 26/02 início às 13h. Não equiparar um calendário previsto à presença comprovada de negócios a cada minuto.')
 
 with tab_terminal:
     if out is None:
-        st.info('Aguardando um CSV de candles válido para exibir sinais.')
+        st.warning('Sinais bloqueados para histórico 2019–2020 não autenticado.' if source.startswith('🔬 Explorar') else 'Aguardando um CSV de candles válido para exibir sinais.')
     else:
         last=out.iloc[-1]
         signal=str(last['signal'])
@@ -220,7 +297,7 @@ with tab_decision:
                          'atr','atr_ratio','candle_atr','trend','trend15']]
         st.download_button('Baixar decisões e todos os bloqueios (CSV)',
                            diag_export.to_csv(index=False).encode('utf-8-sig'),
-                           'decisoes_trader_pro_ai_elite_v10.csv','text/csv',
+                           'decisoes_trader_pro_ai_elite_v11.csv','text/csv',
                            use_container_width=True)
 
 with tab_bt:
@@ -228,7 +305,7 @@ with tab_bt:
     st.caption('Na aba 🧬 Robustez, veja metades temporais, reserva cronológica e sensibilidade a custos adicionais.')
     st.caption('Abertura seguinte, stop prioritário no candle com toque simultâneo, nenhuma ordem enviada. Dias completos obrigatórios.')
     if out is None:
-        st.info('Aguardando dados validados para liberar o backtest.')
+        st.warning('Backtest indisponível para a série 2019–2020 sem identificação de contrato e sessões completas.' if source.startswith('🔬 Explorar') else 'Aguardando dados validados para liberar o backtest.')
     else:
         b1,b2=st.columns(2)
         with b1:
@@ -239,7 +316,7 @@ with tab_bt:
             max_hold=st.number_input('Duração máxima (candles de 5 min)',min_value=1,max_value=100,value=12,step=1)
             daily_loss=st.number_input('Limite de perda diária realizada (pontos)',min_value=0.0,value=200.0,step=25.0)
             st.caption(f'Hipótese: {cost:.1f} pts de taxas + {2*slip*5} pts de slippage por operação.')
-        enable_risk=st.checkbox('Ativar travas extras v1.0 (experimentais)',value=profile=='seletivo')
+        enable_risk=st.checkbox('Ativar travas extras v1.1 (experimentais)',value=profile=='seletivo')
         if enable_risk:
             r1,r2,r3=st.columns(3)
             max_risk=r1.number_input('Risco máximo do stop (pts)',min_value=5.0,value=125.0,step=5.0)
@@ -250,8 +327,8 @@ with tab_bt:
             max_risk=None
             loss_streak=None
             min_rr=0.0
-        run=st.button('Executar backtest v1.0',type='primary',use_container_width=True)
-        compare=st.button('Comparar base v0.5 × seletivo v1.0 (mesmos parâmetros)',use_container_width=True)
+        run=st.button('Executar backtest v1.1',type='primary',use_container_width=True)
+        compare=st.button('Comparar base v0.5 × seletivo v1.1 (mesmos parâmetros)',use_container_width=True)
         if compare:
             try:
                 raw_data=demo_data() if source=='Demonstração fictícia' else checked
@@ -320,10 +397,10 @@ with tab_bt:
                 exported['tipo_dado']=provenance['classificacao']
                 exported['contrato_declarado']=provenance.get('contrato_declarado','NENHUM')
                 exported['sha256_csv_origem']=provenance.get('sha256')
-                st.download_button('Baixar operações v1.0 (CSV)',exported.to_csv(index=False).encode('utf-8-sig'),
-                                   'backtest_trader_pro_ai_elite_v10.csv','text/csv',use_container_width=True)
+                st.download_button('Baixar operações v1.1 (CSV)',exported.to_csv(index=False).encode('utf-8-sig'),
+                                   'backtest_trader_pro_ai_elite_v11.csv','text/csv',use_container_width=True)
                 st.download_button('Baixar auditoria de entradas (CSV)',attempts.to_csv(index=False).encode('utf-8-sig'),
-                                   'auditoria_entradas_v10.csv','text/csv',use_container_width=True)
+                                   'auditoria_entradas_v11.csv','text/csv',use_container_width=True)
                 config={'perfil':profile,'custo_pontos':float(cost),
                         'slippage_ticks_por_lado':int(slip),'max_operacoes_dia':int(daily_limit),
                         'max_hold_candles':int(max_hold),'limite_perda_diaria_pontos':float(daily_loss),
@@ -336,20 +413,20 @@ with tab_bt:
                                 'calendario':{'mercado':'B3 WIN','ano':2026,'feriados_bloqueados':len(HOLIDAYS_2026),
                                               'anos_sem_calendario':'BLOQUEADOS'}},
                                ensure_ascii=False,indent=2).encode('utf-8'),
-                    'relatorio_origem_v10.json','application/json',use_container_width=True)
+                    'relatorio_origem_v11.json','application/json',use_container_width=True)
                 st.caption('Saldo em pontos, não reais. Custos, liquidez e preço de execução são aproximações. Não operar dinheiro real.')
             except (ValueError,TypeError) as exc:
                 st.error(f'Não foi possível executar: {exc}')
 
 
 with tab_robust:
-    st.subheader('🧬 Laboratório de robustez v1.0')
+    st.subheader('🧬 Laboratório de robustez v1.1')
     st.caption('Esta aba mostra fragilidade da amostra e custo adicional no mesmo backtest. NÃO treina IA, não otimiza parâmetros, não mede probabilidade de acerto futuro e não usa cotações ao vivo.')
     if out is None:
-        st.info('Aguardando dados de candles válidos para avaliar a robustez.')
+        st.warning('A robustez de uma estratégia NÃO pode ser medida neste arquivo exploratório sem contrato verificado.' if source.startswith('🔬 Explorar') else 'Aguardando dados de candles válidos para avaliar a robustez.')
     else:
         st.info('A comparação divide os pregões cronologicamente, sem cortar um pregão ao meio. É uma análise DENTRO da mesma amostra, não um verdadeiro teste fora da amostra.')
-        if st.button('🔬 Calcular diagnóstico de robustez',type='primary',key='v10_robust',use_container_width=True):
+        if st.button('🔬 Calcular diagnóstico de robustez',type='primary',key='v11_robust',use_container_width=True):
             try:
                 diagnostic_trades=backtest(out,cost_points=float(cost),max_hold=int(max_hold),
                     slippage_ticks=int(slip),max_daily_trades=int(daily_limit),
@@ -375,14 +452,14 @@ with tab_robust:
                     periods['Acerto líquido']=periods['Acerto líquido'].map(lambda x: 'N/D' if pd.isna(x) else f'{x:.1%}')
                     st.dataframe(periods,use_container_width=True,hide_index=True)
                     st.download_button('Baixar comparação temporal (CSV)',periods.to_csv(index=False).encode('utf-8-sig'),
-                                       'robustez_periodos_v10.csv','text/csv',use_container_width=True)
+                                       'robustez_periodos_v11.csv','text/csv',use_container_width=True)
                 st.markdown('**Teste de custos extras por operação**')
                 st.caption('Os extras de 0, 5, 10 e 20 pontos são SUBTRAÍDOS do resultado líquido já calculado. Não são os custos totais; não há reexecução da estratégia.')
                 stressed=report['custos'].copy()
                 stressed['Acerto líquido']=stressed['Acerto líquido'].map(lambda x: 'N/D' if pd.isna(x) else f'{x:.1%}')
                 st.dataframe(stressed,use_container_width=True,hide_index=True)
                 st.download_button('Baixar cenários de custo (CSV)',stressed.to_csv(index=False).encode('utf-8-sig'),
-                                   'robustez_custos_v10.csv','text/csv',use_container_width=True)
+                                   'robustez_custos_v11.csv','text/csv',use_container_width=True)
                 # Leitura vertical para celular: tabelas detalhadas continuam disponíveis
                 # acima, mas os resultados-chave não exigem arrastar horizontalmente.
                 st.subheader('📱 Resumo por período')
@@ -391,7 +468,7 @@ with tab_robust:
                         with st.container(border=True):
                             st.markdown(f"**{item['Período']}** · {item['De']} a {item['Até']}")
                             st.write(f"{item['Pregões']} pregões · {item['Operações']} operações · Saldo {item['Saldo (pts)']:+.1f} pts")
-                st.subheader('📅 Avaliação cronológica v1.0')
+                st.subheader('📅 Avaliação cronológica v1.1')
                 st.caption('Os últimos ~30% dos pregões INTEIROS são reservados; o arredondamento pode alterar muito a proporção em amostras pequenas. Sem otimização neste painel.')
                 validation = chronological_validation(
                     diagnostic_trades, out,
@@ -415,10 +492,10 @@ with tab_robust:
                         st.write('• ' + message)
                 st.download_button('Baixar resultados por pregão (CSV)',
                     validation['por_dia'].to_csv(index=False).encode('utf-8-sig'),
-                    'validacao_por_pregao_v10.csv','text/csv',use_container_width=True)
+                    'validacao_por_pregao_v11.csv','text/csv',use_container_width=True)
                 st.download_button('Baixar separação temporal (CSV)',
                     validation['segmentos'].to_csv(index=False).encode('utf-8-sig'),
-                    'validacao_segmentos_v10.csv','text/csv',use_container_width=True)
+                    'validacao_segmentos_v11.csv','text/csv',use_container_width=True)
                 for warning in report['alertas']:
                     st.warning(warning)
                 st.caption('Não há IA treinada, probabilidades preditivas ou autorização para ordens. Proibir uso real com base somente nesses relatórios.')
@@ -520,7 +597,7 @@ with tab_data:
             st.error(f'⚠️ {count}/{len(report)} verificações aprovadas. Confira as regras antes de confiar no bloqueio.')
         st.dataframe(pd.DataFrame(report), use_container_width=True, hide_index=True)
         st.caption('Importante: este autoteste verifica regras previstas no código. Não autentica calendário para outros anos, feriados extraordinários ou negociações reais.')
-    st.caption('A v1.0 não baixa dados de terceiros, não verifica licenças, não acessa cotações ao vivo e não envia ordens. Resultado retrospectivo não prevê acertos futuros.')
+    st.caption('A v1.1 não baixa dados de terceiros, não verifica licenças, não acessa cotações ao vivo e não envia ordens. Resultado retrospectivo não prevê acertos futuros.')
 
 st.divider()
-st.caption('Trader Pro AI Elite · v1.0 · Simulador de pesquisa. Horários de referência B3 para 2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')
+st.caption('Trader Pro AI Elite · v1.1 · Simulador de pesquisa. Horários de referência B3 para 2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')

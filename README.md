@@ -1,61 +1,51 @@
-# ◈ Trader Pro AI Elite v1.0 — laboratório de histórico WIN
+# ◈ Trader Pro AI Elite v1.1 — pesquisa de qualidade histórica (celular primeiro)
 
-**Visual premium, celular primeiro.** Aplicação Streamlit para estudar, de maneira crítica, sinais e backtests exploratórios do mini-índice WIN usando candles de **5 minutos**. Sem compra/venda real, sem conexão com corretoras, sem feed ao vivo, sem IA treinada e sem promessa de acerto. **Demonstração fictícia NÃO é evidência de mercado.**
+Aplicativo Streamlit **experimental**, visual premium escuro/roxo, sem IA treinada, corretora, cotações ao vivo ou ordens reais. **Não há taxa de acerto comprovada nem garantia de ganho**.
 
-## 📱 Instalar a atualização no Android (mesmo GitHub + Streamlit Cloud)
+## Como atualizar pelo Android
 
-1. Baixe `Trader_Pro_AI_Elite_v1_0_GitHub.zip` e **extraia** no gerenciador de arquivos.
-2. Abra o **mesmo repositório** do GitHub conectado ao Streamlit Community Cloud.
-3. Escolha **Add file → Upload files** e selecione os **14 arquivos extraídos**, não o ZIP. Substitua os mesmos nomes da versão anterior e adicione `provenance.py` e `test_provenance.py`.
-4. Confirme **Commit changes** na branch `main`. A execução continua apontando para **`app.py`**; o aplicativo existente normalmente atualiza após o commit.
-5. Abra o link já existente no Streamlit. O cabeçalho deve indicar **RESEARCH TERMINAL · V1.0**.
-6. Na tela inicial, escolha **Demonstração fictícia** ou **CSV histórico · origem declarada**. Se não tiver um CSV legítimo, permaneça na demonstração identificada.
-7. Em **🔐 Dados**, execute o autoteste de calendário. Em **🧬 Robustez**, clique em calcular diagnóstico e confira a **proporção efetiva** de pregões reservados.
+1. Baixe e **extraia** o arquivo `Trader_Pro_AI_Elite_v1_1_GitHub.zip`.
+2. Abra **o mesmo repositório GitHub** que já está ligado ao seu Streamlit Community Cloud.
+3. Use **Add file → Upload files** e escolha **os 16 arquivos extraídos** (não o ZIP). Substitua os arquivos antigos de mesmo nome e acrescente `historical.py` e `test_historical.py`.
+4. Confirme **Commit changes** na `main`. O aplicativo continua apontando para **`app.py`**.
+5. Abra o endereço Streamlit existente. No cabeçalho, procure **RESEARCH TERMINAL · V1.1**.
+6. Selecione **🔬 Explorar 2019–2020 · SEM backtest** e carregue o arquivo `WIN_2019_2020_5min_exploratorio.csv` já recebido, **ou** o `data.csv` original. Veja a aba **🔬 Histórico**.
+7. A fonte declarada pode ser `GitHub — FGV_Trabalho_WIN (origem primária não verificada)`; é apenas uma declaração, não um aval da B3.
 
-**Não precisa instalar Python ou pagar Replit.** Os testes de código foram feitos pelo desenvolvimento; o resultado visual final depende da implantação no seu Streamlit Cloud.
+Não é necessário pagar Replit ou instalar Python no celular. A instalação automática do Streamlit Cloud pode requerer alguns ajustes de hospedagem. A barra superior **Manage app** pertence ao Streamlit Cloud e pode continuar visível no navegador móvel.
 
-## O que mudou na v1.0
+## O que mudou na v1.1
 
-- **Importação histórica visível na tela principal**: formulário com CSV, fonte declarada, contrato específico (como `WINZ26`) e confirmação explícita de que não é arquivo fictício.
-- **Triagem mais rigorosa**: tick de **5 pontos**, OHLC, datas duplicadas, candles exatamente de 5 minutos, cada sessão **completa**, nenhuma lacuna dentro da sessão, **nenhum pregão inteiro omitido** entre as datas inicial/final, datas futuras rejeitadas, ticker do arquivo verificado quando houver coluna, feriados bloqueados.
-- **Registros de origem**: relatório baixável JSON com identidade SHA-256 dos bytes, período, fornecedor **declarado**, contrato e ressalvas. Hash **não prova cotações autênticas**.
-- **Calendário WIN 2026**: bloqueio obrigatório de fins de semana e feriados sem pregão, abertura especial em **18/02/2026 às 13h**, vencimentos em 2026 e último candle do contrato vencendo corrigido conforme as grades vigentes (até outubro `16:55`, a partir de novembro `17:55`). Em vencimento o motor **não abre novas operações**; não valida anos além de 2026.
-- **Divisão cronológica mais clara**: mostra a proporção de reserva **efetiva**, e não só o alvo de 30%; por exemplo, 2 de 4 pregões = **50%** por arredondamento. Sem otimização automática nem alegação de teste cego.
-- **Leitura mobile premium** e tentativa de ocultar controles flutuantes do Streamlit dentro da página. A barra de gerenciamento do Streamlit Cloud fora do app pode continuar visível. Tabelas técnicas ainda podem exigir arrastar.
-- **41 testes automatizados aprovados** em ambiente local; incluem nove testes novos de integração do CSV, lacunas, datas futuras, declarações, vencimentos e arredondamento da reserva.
+- **Novo modo separado, EXPLORATÓRIO, para 2019–2020**: aceita CSV já convertido para 5 minutos ou CSV/TSV original com DATE, TIME, OPEN, HIGH, LOW, CLOSE, VOL (1 minuto). CSV é processado no Streamlit Cloud, não há download automático de preços pela aplicação.
+- **Conversão conservadora 1m → 5m**: um candle 5m só é gerado se os cinco minutos exatos estiverem presentes. Janelas parciais são descartadas e contabilizadas. Não cria preços, preenche lacunas ou arredonda ticks fora da grade de 5 pontos.
+- **Calendário histórico auditável**: feriados B3 de 2019 e 2020 e abertura às 13h na quarta de cinzas. Em 2020, 11/06 é fechado; 09/07 e 20/11 **tiveram negociação normal** por exceção posterior aos calendários iniciais.
+- **Qualidade verificável**: detecta candles inválidos/duplicados, horários, lacunas internas, dias de pregão sem nenhum dado, abertura divergente da referência, e datas **nominais** de vencimento como pontos de investigação de eventual rolagem.
+- **Leitura mobile**: novos cartões/relatos verticais com alertas; exportação em JSON e CSV para auditoria.
+- **Proteção para não induzir conclusões falsas**: o modo 2019–2020 **NÃO** passa pelo `engine.analyze()` ou pelo `backtest()`. Sinais e rentabilidade ficam bloqueados porque não se conhece o ticker/contrato de cada candle, os ajustes de rolagem, o fuso comprovado, a origem primária ou o fechamento de todas as sessões.
+- **Modo 2026 separado e preservado**: a validação estrita e o backtest existentes não foram afrouxados para aceitar a série antiga.
 
-## ⚠️ Como conseguir dados históricos legítimos
+## Resultado verificado com o arquivo recebido
 
-A v1.0 **não fornece** dados intradiários autênticos, porque não recebeu um arquivo ou feed licenciado de mercado. Obtenha um CSV OHLC de **WIN 5 minutos** numa plataforma/fornecedor habilitado a disponibilizar históricos. Verifique termos de uso, custos e qualidade com o fornecedor. A página pública da B3 de *cotações históricas do mercado à vista* refere-se a outro conjunto de dados: ela **não é** um CSV pronto de candles WIN intradiários.
+Quando importado o CSV fornecido nesta conversa:
 
-Formato aceito, com cabeçalho e 1 linha por candle de abertura no horário de Brasília:
+- **96.937** barras de 1 minuto de origem, convertidas em **19.257** candles completos de 5 minutos (ou 19.257 no CSV convertido).
+- **227 janelas 5min parciais descartadas**, ao ler o original de 1 minuto.
+- **181 dias com registros**, de **09/12/2019 a 31/08/2020**.
+- **0 dias de pregão inteiros ausentes** entre as datas extremas conforme os feriados e exceções 2019–2020 mapeados; esse número NÃO comprova sessões completas.
+- **72 saltos internos** entre candles 5 minutos (em **15 dias**); **64 dias** têm primeiro candle convertido diferente da abertura de referência (09h, ou 13h na quarta-feira de cinzas).
 
-```csv
-datetime,open,high,low,close,volume,symbol
-```
+**Importante:** o fechamento das sessões individuais não foi autenticado; a causa de cada lacuna (ausência de negócios, dados perdidos, interrupção ou outra condição) é **desconhecida**. A B3 registrou regras especiais e limites de oscilação em 2020. Não atribuir automaticamente qualquer lacuna ao circuit breaker.
 
-`volume` e `symbol` são opcionais; use `symbol` sempre que possível para conferência. Não invente preços, não use **WIN contínuo** como se fosse contrato específico e não misture meses/vencimentos. O conteúdo precisa incluir todas as barras de **cada pregão inteiro**. Para períodos que cruzam contratos, exporte um contrato por vez. O app rejeita CSVs com dias úteis de pregão omitidos entre começo e fim. **Somente 2026** está coberto pelo calendário que foi codificado; outros anos são bloqueados até revisão das grades.
+## Calendário e vencimentos
 
-Os dados enviados pelo navegador são processados no ambiente de hospedagem do Streamlit Cloud; evite carregar conteúdo confidencial se não tiver autorização. A confirmação de fonte é declaração do operador, **não autenticação independente da B3**.
+- 2019: B3 Ofício 049/2018-VOP (calendário de 2019): https://www.b3.com.br/data/files/F8/B3/88/A0/33E97610F157B776AC094EA8/CL%20049-2018_EN_VOP%20Feriados%202019_v7%20R_2.pdf
+- 2020: B3 Ofício 003/2020-VOP (corrigido): https://www.b3.com.br/data/files/97/C7/BB/E1/F50BF6109A4874F6AC094EA8/OC%20003-2020-VOP%20Feriados%202020.pdf
+- Exceções 2020: https://www.b3.com.br/pt_br/noticias/funcionamento-da-b3-8AE490C97215B74E0172959F18F11323.htm
+- Contrato WIN: B3, 5 pontos de tick e vencimento na quarta mais próxima do dia 15 dos meses pares: https://www.b3.com.br/pt_br/produtos-e-servicos/negociacao/renda-variavel/futuro-mini-de-ibovespa.htm
 
-## Regras, limitações e auditoria
+Os dias de vencimento exibidos pelo app são **datas nominais**, não uma prova de que o preço foi corretamente emendado, corrigido ou negociado em determinado contrato. A grade histórica de **encerramento** do WIN, por data, **não** foi homologada neste módulo. Não inferir sessão completa a partir de ter dados até um horário típico.
 
-- As regras de sinal são EMA 9/21, RSI 14, ATR 14 e tendência de 15 min calculada apenas após fechamento. Filtros seletivos são **hipóteses**; o nome comercial **AI** não significa IA treinada.
-- Backtest: abertura do candle seguinte, um trade de cada vez, stop prioritário quando stop e alvo caem no mesmo candle, slippage adverso e custos estimados, limites diários e de risco.
-- Preços de toque intrabar, fila de execução, spreads reais, delays, slippage real, custos e ajustes continuam desconhecidos com OHLC 5m. Qualquer backtest é aproximado.
-- Divisão temporal 70/30 é **retrospectiva**. Se as regras ou dados foram observados antes da separação, não houve verdadeiro teste cego. Uma reserva positiva, mesmo longa, não autoriza operar com dinheiro real.
-- A triagem não verifica se uma plataforma reportou todas as suspensões extraordinárias; consulte sempre comunicados oficiais B3. Calendarização automática de outros anos, conexões a corretoras e qualquer emissão de ordens seguem **desativadas**.
-- **NUNCA** trate um arquivo fictício rotulado como “histórico declarado” como evidência: o software valida sua estrutura, não sua verdade externa.
-
-### Fontes oficiais consultadas
-
-- Calendário B3 2026 e Quarta-feira de Cinzas: https://www.b3.com.br/pt_br/noticias/calendario-de-negociacao-da-b3-confira-o-funcionamento-da-bolsa-em-2026.htm
-- Vencimentos WIN: https://b3.com.br/pt_br/solucoes/plataformas/puma-trading-system/para-participantes-e-traders/calendario-de-negociacao/vencimentos/calendario-de-vencimentos-de-contratos-financeiros/
-- Grade horária a partir de 09/03/2026 — OC 005/2026-PRE: https://www.b3.com.br/data/files/E3/B2/C2/12/BC09C910F37907C9AC094EA8/OC%20005-2026%20PRE%20NOVOS%20HORARIOS%20DE%20NEGOCIACAO_PT.pdf
-- Grade horária a partir de 03/11/2026 — OC 050/2026-VNC: https://www.b3.com.br/data/files/99/B7/82/67/8A631A103BBB511AAC094EA8/OC%20050-2026-VNC%20NOVOS%20HORARIOS%20DE%20NEGOCIACAO_PT.pdf
-- Características e tick do WIN: https://www.b3.com.br/pt_br/produtos-e-servicos/negociacao/renda-variavel/futuro-mini-de-ibovespa.htm
-
-## Rodar testes localmente (opcional)
+## Como testar o código (opcional)
 
 ```bash
 pip install -r requirements.txt
@@ -64,4 +54,8 @@ pytest -q
 streamlit run app.py
 ```
 
-Resultado no desenvolvimento da v1.0: **41 testes passaram**. O sistema continua exclusivamente de pesquisa, com ordens desabilitadas.
+Os testes locais incluem o modo 2026 legado e os cenários 2019–2020. As verificações de Python e pytest não garantem que a implantação visual funcione no Streamlit Cloud. A interface deve ser confirmada depois do commit.
+
+## Limitações de confiança e direitos de dados
+
+O hash SHA-256 identifica os bytes recebidos, **não atesta cotações negociadas na B3**. O conjunto público não comprova o contrato/mês de cada linha, os ajustes da série, a permissão da fonte primária nem o fuso. Não redistribua dados sem verificar os direitos. A aplicação **não inclui** nem publica o arquivo histórico no repositório: ele é enviado pelo próprio usuário ao navegador. Backtests históricos com capital real e execução de corretora permanecem desativados.
