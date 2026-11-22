@@ -3,7 +3,7 @@ from datetime import time
 import math
 import pandas as pd
 
-from engine import TICK, HOLIDAYS_2026, SPECIAL_OPEN_2026
+from engine import TICK, HOLIDAYS_2026, SPECIAL_OPEN_2026, market_day_gate
 
 
 def audit_trades(trades):
@@ -30,8 +30,11 @@ def audit_trades(trades):
                 errors.append('entrada fora do pregão regular')
             if exited.weekday()>=5 or not (time(9,0)<=exited.time()<=time(18,25)):
                 errors.append('saída fora do pregão regular')
-            if entered.date() in HOLIDAYS_2026 or exited.date() in HOLIDAYS_2026:
+            calendar_blocks = {market_day_gate(d) for d in (entered, exited)} - {None}
+            if 'FERIADO_B3' in calendar_blocks:
                 errors.append('feriado B3: sem negociação WIN')
+            if 'CALENDARIO_NAO_VALIDADO' in calendar_blocks:
+                errors.append('calendário B3 não validado para o ano: operação rejeitada')
             if entered.date() in SPECIAL_OPEN_2026 and entered.time()<SPECIAL_OPEN_2026[entered.date()]:
                 errors.append('entrada anterior à abertura especial B3')
             if entered.date()!=exited.date(): errors.append('operação atravessa pregão')

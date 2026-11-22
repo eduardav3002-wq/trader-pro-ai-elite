@@ -1,4 +1,4 @@
-"""Trader Pro AI Elite v0.6: pesquisa de OHLC de WIN, sem ordens reais.
+"""Trader Pro AI Elite v0.7: pesquisa de OHLC de WIN, sem ordens reais.
 
 A validação da grade de preço e dos horários é deliberadamente estrita.
 Horários-base são os da B3 para 2026-11; feriados de 2026 são conferidos,
@@ -15,6 +15,7 @@ TICK = 5.0
 BRT = ZoneInfo("America/Sao_Paulo")
 SESSION_START = time(9, 0)
 LAST_OPEN = time(18, 20)  # candle 18:20–18:25; encerramento normal 18:25
+ENTRY_CUTOFF = time(17, 55)  # última abertura permitida no backtest
 # Calendário específico de 2026, conforme notícia/calendário oficial da B3.
 # Outros anos NÃO são verificados quanto aos feriados por este protótipo.
 HOLIDAYS_2026 = frozenset(pd.Timestamp(x).date() for x in (
@@ -52,6 +53,62 @@ def session_bounds(day, contract=None):
     end = time(16, 55) if contract and day == contract_expiry(contract) else LAST_OPEN
     return start, end
 
+
+
+ENTRY_GATE_LABELS = {
+    'SEM_SINAL': 'Nenhum sinal de compra ou venda neste candle',
+    'FERIADO_B3': 'Bloqueado: B3 sem negociação do WIN nesta data',
+    'FIM_DE_SEMANA': 'Bloqueado: não há pregão de WIN aos sábados e domingos',
+    'CALENDARIO_NAO_VALIDADO': 'Bloqueado: calendário da B3 ainda não validado para esse ano',
+    'FORA_SESSAO': 'Bloqueado: candle fora da sessão regular/especial autorizada',
+    'ELEGIVEL_HORARIO': 'Sinal com próxima abertura disponível dentro do horário',
+    'HORARIO_TARDIO': 'A próxima abertura ultrapassa o horário-limite de entrada',
+    'SEM_CANDLE_SEGUINTE': 'Próximo candle não disponível na mesma sessão',
+    'DIA_VENCIMENTO': 'Sinais não podem gerar entradas no dia do vencimento',
+}
+
+
+def market_day_gate(when):
+    """Falha fechada: sem calendário confirmado, SEM tentativa de negociação.
+
+    Para 2026 utiliza a tabela publicada pela B3 para derivativos listados.
+    Não confundir feriado dos EUA com feriado brasileiro da B3.
+    """
+    when = pd.Timestamp(when)
+    day = when.date()
+    if day.year != 2026:
+        return 'CALENDARIO_NAO_VALIDADO'
+    if day.weekday() >= 5:
+        return 'FIM_DE_SEMANA'
+    if day in HOLIDAYS_2026:
+        return 'FERIADO_B3'
+    return None
+
+
+def signal_entry_gate(signal, signal_dt, next_dt=None, contract=None):
+    """Gate único para elegibilidade de calendário, horário e próximo candle.
+
+    NÃO examina gestão de risco nem autoriza ordem real. Repetido no backtest.
+    """
+    if signal not in ('COMPRA', 'VENDA'):
+        return 'SEM_SINAL'
+    signal_dt = pd.Timestamp(signal_dt)
+    target = signal_dt + pd.Timedelta(minutes=5)
+    for when in (signal_dt, target):
+        block = market_day_gate(when)
+        if block:
+            return block
+    if contract and signal_dt.date() == contract_expiry(contract):
+        return 'DIA_VENCIMENTO'
+    open_time, last_time = session_bounds(target.date(),contract)
+    if (signal_dt.time() < open_time or signal_dt.time() > last_time
+            or target.time() < open_time or target.time() > last_time):
+        return 'FORA_SESSAO'
+    if target.time() > ENTRY_CUTOFF or target.date() != signal_dt.date():
+        return 'HORARIO_TARDIO'
+    if next_dt is None or pd.Timestamp(next_dt) != target:
+        return 'SEM_CANDLE_SEGUINTE'
+    return 'ELEGIVEL_HORARIO'
 
 
 def _normalize_columns(df):
@@ -132,6 +189,12 @@ def validate_win_candles(data, min_rows=80, require_complete_sessions=False, con
         raise ValueError('Esta versão conhece apenas o calendário B3 de 2026. Outros anos estão bloqueados por segurança.')
     if expiry and (df.datetime.dt.date > expiry).any():
         raise ValueError(f'O contrato {contract.upper()} vence em {expiry}; há candles posteriores ao vencimento.')
+    if (df.datetime.dt.dayofweek >= 5).any():
+        raise ValueError('CSV tem candles em sábado/domingo. Dados rejeitados.')
+    on_holiday = df.datetime.dt.date.map(lambda d: d in HOLIDAYS_2026)
+    if on_holiday.any():
+        date = df.datetime.loc[on_holiday].iloc[0].date()
+        raise ValueError(f'Não houve pregão regular WIN no feriado da B3: {date}. Dados rejeitados.')
     times = df.datetime.dt.time
     invalid_time = ~df.datetime.map(
         lambda dt: (session_bounds(dt.date(), contract)[0] <= dt.time()
@@ -140,12 +203,6 @@ def validate_win_candles(data, min_rows=80, require_complete_sessions=False, con
     if invalid_time.any():
         idx = int(np.where(invalid_time.to_numpy())[0][0])
         raise ValueError(f'Horário inválido para candle WIN em Brasília: {df.datetime.iloc[idx]} (linha {idx+2}).')
-    if (df.datetime.dt.dayofweek >= 5).any():
-        raise ValueError('CSV tem candles em sábado/domingo. Dados rejeitados.')
-    on_holiday = df.datetime.dt.date.map(lambda d: d in HOLIDAYS_2026)
-    if on_holiday.any():
-        date = df.datetime.loc[on_holiday].iloc[0].date()
-        raise ValueError(f'Não houve pregão regular WIN no feriado da B3: {date}. Dados rejeitados.')
     delta = df.datetime.diff()
     same_day = df.datetime.dt.normalize().eq(df.datetime.dt.normalize().shift())
     gaps = same_day & delta.ne(pd.Timedelta(minutes=5))
@@ -270,22 +327,52 @@ def analyze(data, contract=None, profile='seletivo'):
     warmup = (pd.Series(np.arange(len(df)), index=df.index) < (34 if profile == 'base' else 75))
     if profile == 'seletivo':
         df.loc[warmup, 'signal'] = 'AGUARDAR'
-    # A classificação dos motivos corresponde à ordem de bloqueio aplicada.
-    checks = [warmup, df.trend15.eq('SEM CONFIRMAÇÃO'),
-              df.atr.isna() | df.atr.le(0)]
-    codes = ['AQUECIMENTO', 'SEM_CONFIRMACAO_15M', 'ATR_INVALIDO']
+    # Todos os motivos de bloqueio são calculados independentemente.
+    # O primeiro preserva o resumo antigo; a nova coluna guarda os demais.
+    ordered_checks = [
+        ('AQUECIMENTO', warmup),
+        ('SEM_CONFIRMACAO_15M', df.trend15.eq('SEM CONFIRMAÇÃO')),
+        ('ATR_INVALIDO', df.atr.isna() | df.atr.le(0)),
+    ]
     if profile == 'seletivo':
-        checks.extend([df.atr_ratio.lt(0.65), df.atr_ratio.gt(1.8),
-                       df.candle_atr.gt(2.2)])
-        codes.extend(['VOLATILIDADE_BAIXA', 'VOLATILIDADE_ALTA', 'CANDLE_EXTREMO'])
-    checks.extend([df.condition.eq('POSSÍVEL LATERALIZAÇÃO'), ~has_trend,
-                   ~agreeing, ~rsi_ok, ~breakout,
-                   df.signal.eq('COMPRA'), df.signal.eq('VENDA')])
-    codes.extend(['LATERALIZACAO', 'SEM_DIRECAO', 'TENDENCIAS_DIVERGENTES',
-                  'RSI_FORA', 'SEM_ROMPIMENTO', 'FILTROS_COMPRA', 'FILTROS_VENDA'])
-    df['reason_code'] = np.select(checks, codes, default='AQUECIMENTO')
+        ordered_checks += [
+            ('VOLATILIDADE_BAIXA', df.atr_ratio.lt(0.65)),
+            ('VOLATILIDADE_ALTA', df.atr_ratio.gt(1.8)),
+            ('CANDLE_EXTREMO', df.candle_atr.gt(2.2)),
+        ]
+    ordered_checks += [
+        ('LATERALIZACAO', df.condition.eq('POSSÍVEL LATERALIZAÇÃO')),
+        ('SEM_DIRECAO', ~has_trend),
+        ('TENDENCIAS_DIVERGENTES', has_trend & df.trend15.ne('SEM CONFIRMAÇÃO') & ~agreeing),
+        ('RSI_FORA', has_trend & ~rsi_ok),
+        ('SEM_ROMPIMENTO', has_trend & ~breakout),
+    ]
+    checks_as_arrays = [(code, series.fillna(False).to_numpy(dtype=bool))
+                        for code, series in ordered_checks]
+    reasons=[]
+    for rowidx, signal in enumerate(df['signal']):
+        if signal in ('COMPRA','VENDA'):
+            reasons.append(['FILTROS_COMPRA' if signal == 'COMPRA' else 'FILTROS_VENDA'])
+        else:
+            matches=[code for code, mask in checks_as_arrays if mask[rowidx]]
+            # Toda decisão de espera deve ser explicável.
+            reasons.append(matches or ['SEM_ROMPIMENTO'])
+    df['all_reason_codes'] = [' | '.join(codes) for codes in reasons]
+    df['all_reason_details'] = [' | '.join(REASON_LABELS[code] for code in codes)
+                                for codes in reasons]
+    df['reason_code'] = [codes[0] for codes in reasons]
     df['reason_detail'] = df.reason_code.map(REASON_LABELS)
     df['profile'] = profile
+
+    # "Candidato" não é ordem executada nem garantia de disponibilidade real.
+    next_dates = df.datetime.shift(-1)
+    gates = [signal_entry_gate(signal, dt,
+              None if pd.isna(next_dates.iat[i]) else next_dates.iat[i],contract)
+              for i,(signal,dt) in enumerate(zip(df.signal,df.datetime))]
+    df['entry_gate_code'] = gates
+    df['entry_gate_detail'] = df.entry_gate_code.map(ENTRY_GATE_LABELS)
+    df['signal_eligible'] = df.signal.where(df.entry_gate_code.eq('ELEGIVEL_HORARIO'),'AGUARDAR')
+    df['expected_entry_time'] = df.datetime + pd.Timedelta(minutes=5)
     df['stop'] = np.where(df.signal.eq('COMPRA'),np.floor((df.close - 1.5*df.atr)/TICK)*TICK,
                    np.where(df.signal.eq('VENDA'),np.ceil((df.close+1.5*df.atr)/TICK)*TICK,np.nan))
     df['target'] = np.where(df.signal.eq('COMPRA'),np.ceil((df.close+2*df.atr)/TICK)*TICK,

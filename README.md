@@ -1,37 +1,33 @@
-# Trader Pro AI Elite v0.6 — Research Terminal (WIN)
+# Trader Pro AI Elite v0.7 — Pesquisa e auditoria (WIN)
 
-Aplicativo Streamlit para **pesquisa e simulação histórica**. Não há ordens, conexão com corretora, preços em tempo real ou inteligência artificial treinada. Não estima probabilidade de acerto e **não deve ser usado para operar dinheiro real**.
+Aplicativo em Streamlit de **simulação retrospectiva de regras**, sem acesso ao mercado ao vivo, sem envio de ordens e sem inteligência artificial treinada. Não há qualquer garantia de lucro ou precisão. **Não usar para operar dinheiro real.**
 
-## Atualizar o GitHub pelo celular
+## Atualizar pelo celular
 
-1. Baixe e **extraia** o ZIP da v0.6 no celular.
-2. No repositório GitHub já conectado ao Streamlit, **substitua os oito arquivos na raiz**: `app.py`, `engine.py`, `backtest.py`, `audit.py`, `test_engine.py`, `test_backtest.py`, `requirements.txt`, `README.md`. **Não envie apenas o ZIP**.
-3. Confirme as alterações em **Commit changes**. O arquivo principal continua sendo **`app.py`**. O Streamlit Cloud normalmente republica quando recebe um novo commit.
-4. Abra o aplicativo publicado; a faixa do topo deve dizer **V0.6**. Na barra lateral, escolha **Demonstração fictícia** e o perfil **Seletivo v0.6 (experimental)**.
-5. Abra **🛑 Não operar** e veja os motivos; depois em **🧪 Backtest** execute a demonstração e baixe o CSV/JSON, se quiser compartilhar para auditoria.
+1. Baixe o ZIP da v0.7 e **extraia** os arquivos.
+2. No repositório conectado ao Streamlit, substitua `app.py`, `engine.py`, `backtest.py`, `audit.py`, `test_engine.py`, `test_backtest.py`, `requirements.txt` e `README.md` na **raiz**.
+3. Confirme em **Commit changes** e abra o aplicativo no Streamlit. A faixa superior deve exibir **V0.7**. O arquivo de entrada permanece `app.py`.
+4. Abra **🛑 Não operar** para ver sinais detectados, candidatos elegíveis no horário, motivos completos por candle e CSV auditável.
+5. Na aba **🧪 Backtest**, examine a auditoria de cada candidato ou compare os perfis sob **os mesmos parâmetros**.
 
-## Mudanças na v0.6
+## Mudanças da v0.7
 
-- **Dois perfis separados:** `Base v0.5 (comparação)` e `Seletivo v0.6 (experimental)`.
-- O seletivo acrescenta dois filtros a EMA 9/21, RSI 14, ATR 14, confirmação 15m e rompimento de três candles. **Os valores abaixo são hipóteses arbitradas para programação**, não calibradas em WIN real:
-  - `ATR atual / mediana dos 60 ATR anteriores` entre **0,65 e 1,80**;
-  - `amplitude do candle / ATR atual` no máximo **2,20**;
-  - período de aquecimento de **75 candles** antes de sinalizar.
-- **Motivo de não operar para cada candle:** tendência divergente, RSI fora da faixa, lateralização, volatilidade, rompimento ausente, aquecimento, etc. Disponível em uma nova aba e CSV exportável.
-- **Travas opcionais de risco para a simulação:** risco estimado do stop por operação, relação risco/retorno mínima e pausa no restante do dia após N perdas consecutivas realizadas. O limite de perda diária preexistente também usa apenas perdas **realizadas**, nunca garante que uma perda individual será limitada. Gaps, leilões e execução real podem gerar perdas maiores.
-- **Auditoria das entradas:** mostra cada sinal candidato e por que entrou ou foi rejeitado no backtest (risco excessivo, entrada tardia, posição aberta, trava diária etc.). Exporta CSV mesmo quando não há operação.
-- **Relatórios v0.6:** operações, auditoria de entradas e JSON com perfil, parâmetros e proveniência. Mantida a marcação inequívoca de dados fictícios.
-- **Terminal histórico:** evita mostrar uma ordem executável quando o último candle não pode ter uma entrada no próximo candle do pregão (por horário). Não existe fluxo ao vivo.
+- **Gate unificado** do motor e do backtest: distingue `COMPRA/VENDA` detectados de candidatos autorizados pelo **calendário da B3**, horário, candle seguinte disponível e vencimento. Um sinal ainda não significa operação executada; limites de risco e posições abertas são analisados na simulação.
+- **Feriados bloqueados obrigatoriamente** na validação dos CSVs, geração de demonstração, elegibilidade de sinais, auditoria e backtest. Bloqueio também de sábados e domingos.
+- **Falha fechada:** aceita apenas datas de 2026, para as quais esta implementação possui calendário confirmado. Não supõe automaticamente que um dia de 2027, por exemplo, esteja aberto.
+- **Pregão especial 18/02/2026:** início a partir das 13h. No vencimento do contrato não geramos novas posições. Vencimentos e horários especiais adicionais devem ser verificados com a B3 antes de uso com dados reais.
+- **Todos os motivos diagnósticos** para candles `AGUARDAR` passam a constar de colunas `all_reason_codes` e `all_reason_details`, além do motivo principal.
+- **Comparação de perfis** base v0.5 / seletivo v0.7 na interface, usando os mesmos custos, slippage e limites de risco.
+- **Registro de auditoria** com o código do bloqueio de horário/calendário para cada sinal detectado, exportado em CSV.
+- A visualização e o relatório JSON indicam calendário e regras de bloqueio. Dados sintéticos continuam explicitamente identificados.
 
-**Nenhum desses controles demonstra maior acerto.** Na demonstração fictícia padrão, com as travas extras ativadas, o seletivo teve **7 operações e −179 pontos**, enquanto a regra-base nas mesmas travas teve **8 operações e −106 pontos**. Esse exercício serve para verificar o funcionamento dos bloqueios, **não** para medir qualidade da estratégia.
+## Arquivos de dados históricos
 
-## CSV de dados históricos (se obtidos legalmente)
+CSV de candles OHLC de cinco minutos: `datetime,open,high,low,close[,volume]`; timestamps de **abertura**, em Brasília (America/Sao_Paulo). Se o CSV contiver `ticker`, `symbol` ou `contrato`, os valores devem concordar com o vencimento declarado (ex.: `WINZ26`). É necessário identificar a fonte e o contrato; isso não certifica a autenticidade. Contratos contínuos não são aceitos como contratos reais específicos.
 
-Colunas: `datetime,open,high,low,close,volume` (volume opcional), um candle por linha de cinco minutos. `datetime` é o **início** do candle no horário de Brasília, por exemplo `2026-11-19 09:00:00`. Se houver coluna `ticker`/`symbol`/`contrato`, seus valores devem bater com o contrato declarado, como `WINZ26`.
+Para backtest, as **sessões precisam estar completas**, com preços na grade de cinco pontos do WIN, horário correto, sem duplicações ou gaps intradiários. Dias posteriores ao vencimento são rejeitados. A versão não cobre todos os leilões, eventos extraordinários, modificações futuras ou horários históricos fora das regras codificadas para 2026. Feriados de outros anos exigem calendário publicado e testado antes da liberação.
 
-Somente **dados de 2026 e de um contrato específico** são aceitos nesta versão. Exige preços na grade de cinco pontos, OHLC coerente, sequência cronológica, sessão regular válida e, para executar backtest, **cada sessão completa**. Contrato contínuo/ajustado não substitui o vencimento específico. No vencimento, esta versão exclui novas operações. Não suporta automaticamente todas as exceções de sessões, leilões ou vencimento; **a validação não autentica preços**. O código não baixa cotação, não contorna serviços pagos nem verifica direitos de uso. Arquivos fictícios podem passar por requisitos estruturais.
-
-## Testes locais
+## Testar localmente
 
 ```bash
 pip install -r requirements.txt
@@ -39,14 +35,11 @@ python -m pytest -q test_engine.py test_backtest.py
 streamlit run app.py
 ```
 
-As bibliotecas de testes e Streamlit são necessárias para executar os comandos; o arquivo `requirements.txt` contém as dependências do aplicativo. Os testes de unidade usam dados sintéticos e avaliam somente a integridade do código. O backtest usa candle seguinte, preenchimento simplificado (tick/slippage constantes), stop prioritário se stop e alvo forem tocados na mesma vela, 1 posição por vez, horário limite, zeragem intradiária e custos aproximados. Ordens reais seguem **desabilitadas**.
+Os testes unitários verificam somente **integridade do código**, não a estratégia. Os sinais continuam experimentais; com preços sintéticos não é possível estimar acurácia verdadeira. Custos, slippage e preenchimento por OHLC são simplificados, não refletem necessariamente negociações executáveis.
 
-## Próximas tarefas
+## Fontes oficiais da B3
 
-Obter candles reais de fornecedor autorizado e identificar a fonte, validar regras oficiais de sessões/vencimentos, testar múltiplos períodos fora da amostra, considerar custos e execução reais e incluir análise de incerteza. Não otimizar métricas em cima de demonstração inventada.
-
-**Referências B3 para conferir quando usar dados reais:**
-
-- https://www.b3.com.br/pt_br/produtos-e-servicos/negociacao/renda-variavel/futuro-mini-de-ibovespa.htm
-- https://www.b3.com.br/pt_br/solucoes/plataformas/puma-trading-system/para-participantes-e-traders/horario-de-negociacao/derivativos/indices/
 - https://www.b3.com.br/pt_br/noticias/calendario-de-negociacao-da-b3-confira-o-funcionamento-da-bolsa-em-2026.htm
+- https://www.b3.com.br/pt_br/solucoes/plataformas/puma-trading-system/para-participantes-e-traders/horario-de-negociacao/derivativos/indices/
+
+`2026-11-20`, `2026-12-24`, `2026-12-25` e `2026-12-31` são datas sem pregão WIN, por exemplo. **Não assuma** que feriado bancário americano implica fechamento do WIN na B3.

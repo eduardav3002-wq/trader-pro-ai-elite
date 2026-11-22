@@ -5,9 +5,8 @@ import math
 import pandas as pd
 import numpy as np
 
-from engine import TICK, validate_win_candles, contract_expiry
+from engine import TICK, validate_win_candles, contract_expiry, signal_entry_gate, ENTRY_CUTOFF
 
-ENTRY_CUTOFF = time(17,55)  # margem antes do fechamento do pregão
 FLAT_CANDLE = time(18,10)   # saída no fechamento às 18:15, antes do call
 COLUMNS = ('sinal_candle','entrada_candle','saida_candle','direcao','entrada','stop','alvo','saida',
            'motivo','gross_points','cost_points','slippage_points','net_points',
@@ -53,7 +52,7 @@ def backtest(data, cost_points=2.0, max_hold=12, slippage_ticks=1, max_daily_tra
     daily = {}
     decisions = {}
     i = 34
-    while i < len(df)-1:
+    while i < len(df):
         direction = df.at[i,'signal']
         atr = float(df.at[i,'atr'])
         if direction not in ('COMPRA','VENDA'):
@@ -62,16 +61,12 @@ def backtest(data, cost_points=2.0, max_hold=12, slippage_ticks=1, max_daily_tra
             decisions[i]='ATR_INVALIDO'; i+=1;continue
         entry_i=i+1
         signal_dt=df.at[i,'datetime']
-        entry_dt=df.at[entry_i,'datetime']
-        if entry_dt.date()!=signal_dt.date() or entry_dt-signal_dt!=pd.Timedelta(minutes=5):
-            decisions[i]='SEM_CANDLE_SEGUINTE_MESMO_DIA'; i+=1;continue
-        if entry_dt.time()>ENTRY_CUTOFF:
-            decisions[i]='HORARIO_TARDIO'; i+=1;continue
+        next_dt=df.at[entry_i,'datetime'] if entry_i < len(df) else None
+        gate=signal_entry_gate(direction,signal_dt,next_dt,contract)
+        if gate != 'ELEGIVEL_HORARIO':
+            decisions[i]=gate; i+=1;continue
+        entry_dt=next_dt
         day=entry_dt.date()
-        # No vencimento há regras especiais de settlement/horário.
-        # Excluímos todo o dia até modelarmos o vencimento explicitamente.
-        if expiry and day == expiry:
-            decisions[i]='DIA_VENCIMENTO'; i+=1;continue
         d=daily.setdefault(day,{'trades':0,'net':0.0,'loss_streak':0})
         if d['trades']>=max_daily_trades:
             decisions[i]='MAX_OPERACOES_DIA'; i+=1;continue
@@ -156,5 +151,6 @@ def backtest(data, cost_points=2.0, max_hold=12, slippage_ticks=1, max_daily_tra
         audit_rows.append({'sinal_candle':int(idx),
                            'sinal_data':str(df.at[idx,'datetime']),
                            'direcao':str(df.at[idx,'signal']),
-                           'decisao':decisions.get(int(idx),'SEM_PROXIMO_CANDLE')})
-    return trades,pd.DataFrame(audit_rows,columns=('sinal_candle','sinal_data','direcao','decisao'))
+                           'decisao':decisions.get(int(idx),'SEM_CANDLE_SEGUINTE'),
+                           'janela_entrada':df.at[idx,'entry_gate_code'] if 'entry_gate_code' in df else signal_entry_gate(df.at[idx,'signal'],df.at[idx,'datetime'],df.at[idx+1,'datetime'] if idx+1<len(df) else None,contract)})
+    return trades,pd.DataFrame(audit_rows,columns=('sinal_candle','sinal_data','direcao','decisao','janela_entrada'))

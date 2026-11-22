@@ -88,3 +88,28 @@ def test_v06_risk_controls_and_audit():
             pass
         else:
             raise AssertionError('Parâmetro de risco inválido passou.')
+
+
+
+def test_v07_trade_audit_and_calendar():
+    from engine import analyze, demo_data
+    source=analyze(demo_data(),profile='seletivo')
+    trades,audit=backtest(source,contract='WINZ26',return_audit=True,
+                          max_trade_risk_points=125.0,max_consecutive_losses=2,
+                          min_reward_risk=1.0)
+    assert len(audit)==int(source.signal.isin(('COMPRA','VENDA')).sum())
+    assert 'janela_entrada' in audit.columns
+    assert (audit.janela_entrada=='HORARIO_TARDIO').sum()==2
+    assert ((audit.decisao=='EXECUTADA').sum()==len(trades))
+    assert not pd.to_datetime(trades.entrada_data).dt.date.isin([pd.Timestamp('2026-11-20').date()]).any()
+    # Auditoria de operações, independente de dados OHLC: nunca aprovar feriado.
+    row={'direcao':'COMPRA','entrada':128000.,'stop':127900.,'alvo':128150.,'saida':128150.,
+         'entrada_data':'2026-11-20 10:00:00','saida_data':'2026-11-20 10:05:00'}
+    checked=audit_trades(pd.DataFrame([row]))
+    assert checked.status_auditoria.iat[0]=='REJEITADA'
+    assert 'feriado B3' in checked.problemas.iat[0]
+    row['entrada_data']='2027-01-04 10:00:00'
+    row['saida_data']='2027-01-04 10:05:00'
+    checked=audit_trades(pd.DataFrame([row]))
+    assert checked.status_auditoria.iat[0]=='REJEITADA'
+    assert 'não validado' in checked.problemas.iat[0]

@@ -1,4 +1,4 @@
-"""Trader Pro AI Elite v0.6 — pesquisa sem corretora nem ordens."""
+"""Trader Pro AI Elite v0.7 — pesquisa sem corretora nem ordens."""
 import hashlib
 import io
 import json
@@ -9,9 +9,9 @@ import streamlit as st
 
 from audit import audit_trades
 from backtest import backtest
-from engine import analyze, demo_data
+from engine import analyze, demo_data, HOLIDAYS_2026, market_day_gate, signal_entry_gate, ENTRY_GATE_LABELS
 
-st.set_page_config(page_title='Trader Pro AI Elite · v0.6',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
+st.set_page_config(page_title='Trader Pro AI Elite · v0.7',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
 st.markdown('''<style>
 .stApp{background:#080e1a;color:#e9f0fb}.block-container{max-width:1250px;padding:1rem 1rem 3rem}
 header[data-testid="stHeader"]{background:transparent}
@@ -31,7 +31,7 @@ section[data-testid="stSidebar"]{background:#101a2b}
 @media(max-width:640px){.block-container{padding:.8rem .7rem 2rem}.hero{padding:16px}.signal{padding:14px}}
 </style>''',unsafe_allow_html=True)
 
-st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V0.6</div>
+st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V0.7</div>
 <div class="hero-title">◈ TRADER PRO AI ELITE</div>
 <div class="hero-sub">WIN · Intraday · Filtros EMA 9/21, RSI 14, ATR 14 e tendência 15m</div>
 <span class="pill">● MODO PESQUISA — SEM ORDENS REAIS</span></div>''',unsafe_allow_html=True)
@@ -42,10 +42,11 @@ with st.sidebar:
     chart_bars=st.slider('Candles no gráfico',30,180,75,15)
     show_ema=st.toggle('Exibir médias móveis',True)
     profile_ui=st.radio('Perfil de pesquisa',
-                        ['Seletivo v0.6 (experimental)','Base v0.5 (comparação)'],index=0)
+                        ['Seletivo v0.7 (experimental)','Base v0.5 (comparação)'],index=0)
     profile='seletivo' if profile_ui.startswith('Seletivo') else 'base'
     st.caption('Seletivo aplica filtros de volatilidade/candles. Valores escolhidos para demonstrar regras, NÃO ajustados ao WIN real.')
     st.divider()
+    st.caption('CALENDÁRIO B3: feriados e fins de semana bloqueados. Esta versão valida apenas o calendário de 2026 e rejeita anos não certificados.')
     st.caption('Para usar histórico: candles de 5 min de um contrato WIN específico, dias completos de 2026 e horário de Brasília. Origem declarada NÃO significa autenticidade verificada.')
 
 out=None
@@ -104,17 +105,13 @@ with tab_terminal:
     else:
         last=out.iloc[-1]
         signal=str(last['signal'])
-        from datetime import time
-        from backtest import ENTRY_CUTOFF
-        # Um sinal sem abertura seguinte elegível não é executável, mesmo no histórico.
-        next_open=(last['datetime']+pd.Timedelta(minutes=5))
-        entry_possible=(next_open.date()==last['datetime'].date() and
-                        next_open.time()<=ENTRY_CUTOFF)
-        display_signal=signal if entry_possible else 'AGUARDAR'
+        # É um candle HISTÓRICO: sem próximo candle no arquivo, nenhuma nova
+        # entrada executável deve ser exibida, ainda que haja sinal teórico.
+        gate=str(last['entry_gate_code'])
+        display_signal=str(last['signal_eligible'])
         palette={'COMPRA':'#4bd4a3','VENDA':'#ff7f91','AGUARDAR':'#f1c56e'}
-        reason_text=str(last['reason_detail'])
-        if not entry_possible:
-            reason_text='Sem abertura elegível no próximo candle, dentro da janela de entrada do backtest.'
+        reason_text=(str(last['reason_detail']) if gate=='ELEGIVEL_HORARIO'
+                     else ENTRY_GATE_LABELS.get(gate,'Bloqueio de calendário/horário'))
         st.markdown(f'''<div class="signal" style="border-left:5px solid {palette[display_signal]}"><div class="muted">ÚLTIMO CANDLE CARREGADO · {profile_ui}</div>
         <strong style="color:{palette[display_signal]}">{display_signal}</strong><div class="muted">{reason_text}</div></div>''',unsafe_allow_html=True)
         st.caption('Sinal retrospectivo. Não é cotação ao vivo nem recomendação para operar. NOVAS ordens seguem desligadas.')
@@ -142,6 +139,8 @@ with tab_terminal:
             st.write('• Tendência dos candles completos 15m: **'+str(last['trend15'])+'**')
             st.write('• Condição de mercado: **'+str(last['condition'])+'**')
             st.write('• Código do motivo: **'+str(last['reason_code'])+'**')
+            st.write('• Todos os critérios por candle: **'+str(last['all_reason_details'])+'**')
+            st.write('• Elegibilidade de calendário/horário: **'+str(last['entry_gate_detail'])+'**')
             if profile=='seletivo':
                 st.write(f"• ATR relativo à mediana anterior: **{last['atr_ratio']:.2f}** (faixa exploratória 0,65 a 1,80).")
                 st.write(f"• Amplitude do candle / ATR: **{last['candle_atr']:.2f}** (máximo 2,20).")
@@ -167,20 +166,35 @@ with tab_decision:
     else:
         waiting=out[out.signal.eq('AGUARDAR')]
         total=int(len(out))
+        n_signals=int(out.signal.isin(['COMPRA','VENDA']).sum())
+        n_eligible=int(out.entry_gate_code.eq('ELEGIVEL_HORARIO').sum())
+        n_blocked=n_signals-n_eligible
+        c1,c2,c3=st.columns(3)
+        c1.metric('Sinais detectados',n_signals)
+        c2.metric('Candidatos no horário',n_eligible)
+        c3.metric('Sinais bloqueados',n_blocked)
         st.metric('Candles marcados AGUARDAR',f'{len(waiting)} / {total}')
-        st.caption(f'Percentual de espera: {100*len(waiting)/total:.1f}% dos candles. Isso não indica qualidade dos sinais.')
+        st.caption('Candles com sinal ainda podem ser bloqueados por horário, feriado, limite de risco ou posição aberta.')
+        gates=out[out.signal.isin(['COMPRA','VENDA'])].groupby(['entry_gate_code','entry_gate_detail'],as_index=False).size()
+        st.subheader('⛔ Bloqueios de calendário e horário')
+        if len(gates):
+            st.dataframe(gates.rename(columns={'entry_gate_detail':'Explicação','size':'Quantidade'})[['entry_gate_code','Explicação','Quantidade']],hide_index=True,use_container_width=True)
         reasons=(waiting.groupby(['reason_code','reason_detail'],as_index=False).size()
                  .sort_values('size',ascending=False)
                  .rename(columns={'reason_detail':'Motivo','size':'Candles'}))
+        st.subheader('Primeiro motivo de espera')
         st.dataframe(reasons[['Motivo','Candles']],hide_index=True,use_container_width=True)
+        st.caption('Os motivos completos aparecem no CSV; podem existir vários ao mesmo tempo.')
         st.subheader('Registro dos últimos 30 candles')
-        st.dataframe(out[['datetime','signal','reason_detail','atr_ratio','candle_atr']].tail(30),
+        st.dataframe(out[['datetime','signal','signal_eligible','entry_gate_detail','all_reason_details']].tail(30),
                      hide_index=True,use_container_width=True)
-        diag_export=out[['datetime','open','high','low','close','signal','reason_code',
-                         'reason_detail','atr','atr_ratio','candle_atr','trend','trend15']]
-        st.download_button('Baixar decisões por candle (CSV)',
+        diag_export=out[['datetime','open','high','low','close','signal','signal_eligible',
+                         'entry_gate_code','entry_gate_detail','expected_entry_time',
+                         'reason_code','reason_detail','all_reason_codes','all_reason_details',
+                         'atr','atr_ratio','candle_atr','trend','trend15']]
+        st.download_button('Baixar decisões e todos os bloqueios (CSV)',
                            diag_export.to_csv(index=False).encode('utf-8-sig'),
-                           'decisoes_trader_pro_ai_elite_v06.csv','text/csv',
+                           'decisoes_trader_pro_ai_elite_v07.csv','text/csv',
                            use_container_width=True)
 
 with tab_bt:
@@ -198,7 +212,7 @@ with tab_bt:
             max_hold=st.number_input('Duração máxima (candles de 5 min)',min_value=1,max_value=100,value=12,step=1)
             daily_loss=st.number_input('Limite de perda diária realizada (pontos)',min_value=0.0,value=200.0,step=25.0)
             st.caption(f'Hipótese: {cost:.1f} pts de taxas + {2*slip*5} pts de slippage por operação.')
-        enable_risk=st.checkbox('Ativar travas extras v0.6 (experimentais)',value=profile=='seletivo')
+        enable_risk=st.checkbox('Ativar travas extras v0.7 (experimentais)',value=profile=='seletivo')
         if enable_risk:
             r1,r2,r3=st.columns(3)
             max_risk=r1.number_input('Risco máximo do stop (pts)',min_value=5.0,value=125.0,step=5.0)
@@ -209,7 +223,28 @@ with tab_bt:
             max_risk=None
             loss_streak=None
             min_rr=0.0
-        run=st.button('Executar backtest v0.6',type='primary',use_container_width=True)
+        run=st.button('Executar backtest v0.7',type='primary',use_container_width=True)
+        compare=st.button('Comparar base v0.5 × seletivo v0.7 (mesmos parâmetros)',use_container_width=True)
+        if compare:
+            try:
+                raw_data=demo_data() if source=='Demonstração fictícia' else raw
+                comparisons=[]
+                for comp_profile in ('base','seletivo'):
+                    comp_analyzed=analyze(raw_data,contract=contract,profile=comp_profile)
+                    comp_trades=backtest(comp_analyzed,cost_points=float(cost),max_hold=int(max_hold),
+                        slippage_ticks=int(slip),max_daily_trades=int(daily_limit),
+                        max_daily_loss_points=float(daily_loss),contract=contract,
+                        max_trade_risk_points=float(max_risk) if max_risk is not None else None,
+                        max_consecutive_losses=int(loss_streak) if loss_streak is not None else None,
+                        min_reward_risk=float(min_rr))
+                    comparisons.append({'Perfil':comp_profile,'Sinais':int(comp_analyzed.signal.isin(['COMPRA','VENDA']).sum()),
+                        'Candidatos no horário':int(comp_analyzed.entry_gate_code.eq('ELEGIVEL_HORARIO').sum()),
+                        'Operações':int(len(comp_trades)),'Saldo (pts)':round(float(comp_trades.net_points.sum()),2)})
+                st.subheader('Comparação sob os mesmos controles')
+                st.dataframe(pd.DataFrame(comparisons),hide_index=True,use_container_width=True)
+                st.warning('Comparação retrospectiva. Na demonstração, preços inventados: não é evidência de maior acerto.')
+            except (ValueError,TypeError,pd.errors.ParserError) as exc:
+                st.error(f'Não foi possível comparar: {exc}')
         if run:
             try:
                 trades,attempts=backtest(out,cost_points=float(cost),max_hold=int(max_hold),
@@ -254,10 +289,10 @@ with tab_bt:
                 exported['tipo_dado']=provenance['tipo']
                 exported['contrato_declarado']=provenance.get('contrato','NENHUM')
                 exported['sha256_csv_origem']=provenance.get('sha256_csv')
-                st.download_button('Baixar operações v0.6 (CSV)',exported.to_csv(index=False).encode('utf-8-sig'),
-                                   'backtest_trader_pro_ai_elite_v06.csv','text/csv',use_container_width=True)
+                st.download_button('Baixar operações v0.7 (CSV)',exported.to_csv(index=False).encode('utf-8-sig'),
+                                   'backtest_trader_pro_ai_elite_v07.csv','text/csv',use_container_width=True)
                 st.download_button('Baixar auditoria de entradas (CSV)',attempts.to_csv(index=False).encode('utf-8-sig'),
-                                   'auditoria_entradas_v06.csv','text/csv',use_container_width=True)
+                                   'auditoria_entradas_v07.csv','text/csv',use_container_width=True)
                 config={'perfil':profile,'custo_pontos':float(cost),
                         'slippage_ticks_por_lado':int(slip),'max_operacoes_dia':int(daily_limit),
                         'max_hold_candles':int(max_hold),'limite_perda_diaria_pontos':float(daily_loss),
@@ -265,10 +300,12 @@ with tab_bt:
                         'max_perdas_seguidas':int(loss_streak) if loss_streak is not None else None,
                         'min_rr_teorico':float(min_rr)}
                 st.download_button('Baixar relatório de origem e parâmetros (JSON)',
-                    json.dumps({'versao':'0.6','dados':provenance,'parametros':config,
-                                'total_operacoes':len(trades),'saldo_pontos':net},
+                    json.dumps({'versao':'0.7','dados':provenance,'parametros':config,
+                                'total_operacoes':len(trades),'saldo_pontos':net,
+                                'calendario':{'mercado':'B3 WIN','ano':2026,'feriados_bloqueados':len(HOLIDAYS_2026),
+                                              'anos_sem_calendario':'BLOQUEADOS'}},
                                ensure_ascii=False,indent=2).encode('utf-8'),
-                    'relatorio_origem_v06.json','application/json',use_container_width=True)
+                    'relatorio_origem_v07.json','application/json',use_container_width=True)
                 st.caption('Saldo em pontos, não reais. Custos, liquidez e preço de execução são aproximações. Não operar dinheiro real.')
             except (ValueError,TypeError) as exc:
                 st.error(f'Não foi possível executar: {exc}')
@@ -299,7 +336,12 @@ with tab_data:
         st.json(provenance)
         st.info('SHA-256 identifica os bytes do arquivo carregado. Não comprova se as cotações são reais, corretas ou completas no fornecedor.')
     st.markdown('''**Para um backtest histórico comparável:** exporte candles OHLC de 5 minutos de um único vencimento do WIN em 2026, com data/hora de abertura no fuso de Brasília, pregões completos e sem gaps. Declare a origem e o ticker da série (ex.: WINZ26). Um CSV de operações não substitui candles.''')
-    st.caption('A v0.6 não baixa dados de terceiros, não verifica licenças, não acessa cotações ao vivo e não envia ordens. Resultado retrospectivo não prevê acertos futuros.')
+    st.subheader('📆 Bloqueio obrigatório de feriados da B3')
+    st.caption('Tabela oficial de 2026: candles e entradas de WIN em datas sem pregão são bloqueados. Datas especiais são validadas separadamente; anos além de 2026 não são autorizados até atualização do calendário.')
+    holidays=pd.DataFrame({'Feriados B3 2026': [x.strftime('%d/%m/%Y') for x in sorted(HOLIDAYS_2026)]})
+    st.dataframe(holidays,hide_index=True,use_container_width=True)
+    st.caption('Fonte oficial: https://www.b3.com.br/pt_br/noticias/calendario-de-negociacao-da-b3-confira-o-funcionamento-da-bolsa-em-2026.htm')
+    st.caption('A v0.7 não baixa dados de terceiros, não verifica licenças, não acessa cotações ao vivo e não envia ordens. Resultado retrospectivo não prevê acertos futuros.')
 
 st.divider()
-st.caption('Trader Pro AI Elite · v0.6 · Simulador de pesquisa. Horários de referência B3 em nov/2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')
+st.caption('Trader Pro AI Elite · v0.7 · Simulador de pesquisa. Horários de referência B3 em nov/2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')

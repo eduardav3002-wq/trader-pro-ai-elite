@@ -130,3 +130,58 @@ def test_v06_no_future_in_all_columns():
     # Dados futuros não podem mudar a decisão nem diagnóstico de um candle já fechado.
     for col in ['signal','reason_code','atr_ratio','candle_atr']:
         pd.testing.assert_series_equal(a[col].iloc[:260],b[col].iloc[:260],check_names=False)
+
+
+
+def test_v07_market_calendar_hard_gate():
+    from engine import HOLIDAYS_2026, market_day_gate, signal_entry_gate, ENTRY_GATE_LABELS
+    assert len(HOLIDAYS_2026) == 14
+    # Feriados em que não houve negociação e datas de dezembro fechadas.
+    for day in ['2026-02-16', '2026-02-17', '2026-11-20',
+                '2026-12-24', '2026-12-25', '2026-12-31']:
+        assert market_day_gate(f'{day} 09:00') == 'FERIADO_B3'
+        assert signal_entry_gate('COMPRA', f'{day} 09:00', f'{day} 09:05') == 'FERIADO_B3'
+    assert market_day_gate('2026-11-21 09:00') == 'FIM_DE_SEMANA'
+    assert market_day_gate('2027-01-04 09:00') == 'CALENDARIO_NAO_VALIDADO'
+    assert signal_entry_gate('VENDA','2027-01-04 09:00','2027-01-04 09:05') == 'CALENDARIO_NAO_VALIDADO'
+    assert signal_entry_gate('COMPRA','2026-11-19 09:00','2026-11-19 09:05') == 'ELEGIVEL_HORARIO'
+    assert signal_entry_gate('COMPRA','2026-11-19 18:10','2026-11-19 18:15') == 'HORARIO_TARDIO'
+    # Quarta-feira de Cinzas: não permite candle/entrada antes das 13h.
+    assert signal_entry_gate('COMPRA','2026-02-18 09:00','2026-02-18 09:05') == 'FORA_SESSAO'
+    assert signal_entry_gate('COMPRA','2026-02-18 13:00','2026-02-18 13:05') == 'ELEGIVEL_HORARIO'
+    assert 'FERIADO_B3' in ENTRY_GATE_LABELS
+
+
+def test_v07_reject_holiday_candles():
+    from engine import demo_data, validate_win_candles
+    valid = demo_data()
+    first_session = valid[valid.datetime.dt.date.eq(valid.datetime.dt.date.iloc[0])].copy()
+    for holiday in ['2026-11-20', '2026-12-24', '2026-12-25', '2026-12-31']:
+        invalid = first_session.copy()
+        invalid['datetime'] = pd.to_datetime(holiday) + (invalid['datetime'] - invalid['datetime'].iloc[0])
+        try:
+            validate_win_candles(invalid, min_rows=80)
+        except ValueError as exc:
+            assert 'feriado da B3' in str(exc), str(exc)
+        else:
+            raise AssertionError(f'Candles no feriado {holiday} deveriam ser rejeitados')
+    future = first_session.copy()
+    future['datetime'] += pd.DateOffset(years=1)
+    try:
+        validate_win_candles(future, min_rows=80)
+    except ValueError as exc:
+        assert 'calendário B3 de 2026' in str(exc)
+    else:
+        raise AssertionError('Ano sem calendário validado deveria ser bloqueado.')
+
+
+def test_v07_diagnostics_and_entry_gates():
+    from engine import demo_data, analyze, ENTRY_GATE_LABELS
+    analyzed = analyze(demo_data(), profile='seletivo')
+    assert analyzed['all_reason_details'].notna().all()
+    signals = analyzed[analyzed.signal.isin(('COMPRA','VENDA'))]
+    assert len(signals) == 21
+    assert (signals.entry_gate_code == 'ELEGIVEL_HORARIO').sum() == 19
+    assert (signals.entry_gate_code == 'HORARIO_TARDIO').sum() == 2
+    assert analyzed.entry_gate_code.isin(ENTRY_GATE_LABELS).all()
+    assert (analyzed.loc[analyzed.entry_gate_code.ne('ELEGIVEL_HORARIO'),'signal_eligible'] == 'AGUARDAR').all()
