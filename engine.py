@@ -1,4 +1,4 @@
-"""Trader Pro AI Elite v0.7: pesquisa de OHLC de WIN, sem ordens reais.
+"""Trader Pro AI Elite v0.8: motor de OHLC do WIN preservado da v0.7, sem ordens reais.
 
 A validação da grade de preço e dos horários é deliberadamente estrita.
 Horários-base são os da B3 para 2026-11; feriados de 2026 são conferidos,
