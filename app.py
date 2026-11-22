@@ -1,4 +1,4 @@
-"""Trader Pro AI Elite v1.7 — comparação entre fontes, sem ordens."""
+"""Trader Pro AI Elite v1.8 — diagnóstico de divergências, sem ordens."""
 import json
 
 import pandas as pd
@@ -17,9 +17,76 @@ from traceability_lab import read_contract_map, traceability_audit, EMPTY_TEMPLA
 from source_lab import inspect_ticker_m1
 from cross_price_lab import audit_cross_prices, compare_v15_receipt
 from independent_lab import compare_independent_m1
+from discrepancy_lab import diagnose_m1_differences, controlled_demo_pair
 from engine import analyze, demo_data, HOLIDAYS_2026, market_day_gate, signal_entry_gate, ENTRY_GATE_LABELS
 
-st.set_page_config(page_title='Trader Pro AI Elite · v1.7',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
+def render_differences_v18(summary, fields, ranges, events, key_prefix):
+    """Cartões móveis e exportações de diagnóstico sem certificar cotações."""
+    st.markdown('**📱 Diagnóstico detalhado dos dois arquivos**')
+    c1,c2=st.columns(2)
+    c1.metric('M1 em comum', summary['minutos_em_comum'])
+    c2.metric('M1 com diferença OHLC', summary['minutos_com_divergencia_ohlc'])
+    c1.metric('Somente em A', summary['minutos_somente_a'])
+    c2.metric('Somente em B', summary['minutos_somente_b'])
+    if summary['mesmo_arquivo']:
+        st.error('Mesmos bytes (SHA-256 igual). Comparação NÃO independente.')
+    if not summary['fusos_declarados_iguais']:
+        st.warning('Fusos declarados diferentes: minutos correspondem apenas ao texto dos timestamps. Nenhum alinhamento foi feito.')
+    if summary['deslocamento_uniforme_pts_na_sobreposicao'] is not None:
+        delta=summary['deslocamento_uniforme_pts_na_sobreposicao']
+        st.warning(f'Deslocamento uniforme de {delta:+,.0f} pontos nos minutos comparados (diferença B − A). Isso NÃO comprova rolagem nem permite corrigir os dados automaticamente.')
+    st.caption('Diferenças sempre calculadas como FONTE B − FONTE A. Volume, se disponível, é verificado separadamente; unidades não certificadas.')
+    st.markdown('**🔎 Divergências por campo OHLC**')
+    cols=st.columns(2)
+    for i,rec in enumerate(fields.to_dict('records')):
+        with cols[i%2]:
+            with st.container(border=True):
+                st.markdown('**'+str(rec['campo'])+'**')
+                st.write(f"{rec['minutos_com_diferenca']} minuto(s) divergentes")
+                mag=rec['maior_diferenca_absoluta_pts']
+                st.caption('Maior diferença absoluta: '+(f'{mag:,.0f} pontos' if mag is not None else 'sem minutos comparáveis'))
+    if summary['minutos_com_diferenca_volume'] is None:
+        st.caption('Volume: não comparável porque falta em um dos arquivos.')
+    else:
+        st.caption(f"Volume com diferenças numéricas: {summary['minutos_com_diferenca_volume']} minuto(s). Não assumir unidade idêntica.")
+    st.markdown('**🕒 Faixas exclusivas (prévia)**')
+    st.caption('“Ausente em B” significa presente no A e não observado no B; NÃO comprova ausência de negociação na B3.')
+    if ranges.empty:
+        st.info('Não foram encontradas faixas exclusivas entre os dois arquivos.')
+    else:
+        for rec in ranges.head(8).to_dict('records'):
+            with st.container(border=True):
+                st.write(f"**{rec['dia']} · {rec['contrato']} · ausente em {rec['ausente_em']}**")
+                st.caption(f"{str(rec['primeiro_minuto'])[11:16]} até {str(rec['ultimo_minuto'])[11:16]} · {rec['minutos_exclusivos']} minuto(s)")
+        if len(ranges)>8:
+            st.caption(f'{len(ranges)-8} faixa(s) adicionais no CSV completo.')
+    st.markdown('**📋 Eventos de diferença (prévia)**')
+    if events.empty:
+        st.info('Nenhuma diferença no intervalo comparável. Isso NÃO comprova origem independente.')
+    else:
+        kinds=['Todos']+sorted(events['tipo'].dropna().unique().tolist())
+        selected=st.selectbox('Mostrar tipo de evento',kinds,key=key_prefix+'_event_filter')
+        view=events if selected=='Todos' else events.loc[events['tipo'].eq(selected)]
+        st.dataframe(view.head(15),hide_index=True,use_container_width=True)
+        st.caption('Os downloads incluem até 500 eventos, e os totais consideram todos os registros. O filtro afeta só a visualização.')
+    if summary['eventos_truncados']:
+        st.warning(f"Existem {summary['eventos_total']} eventos; prévia limitada aos primeiros {summary['eventos_exibidos']}. Todos os totais são calculados com o conjunto completo.")
+    st.download_button('⬇️ Laudo detalhado v1.8 (JSON)',
+        json.dumps(summary,ensure_ascii=False,indent=2).encode('utf-8'),
+        'diagnostico_divergencias_WIN_v18.json','application/json',use_container_width=True,key=key_prefix+'_json')
+    st.download_button('⬇️ Divergências por OHLC (CSV)',
+        fields.to_csv(index=False).encode('utf-8-sig'),
+        'divergencias_por_campo_WIN_v18.csv','text/csv',use_container_width=True,key=key_prefix+'_fields')
+    st.download_button('⬇️ Faixas exclusivas (CSV)',
+        ranges.to_csv(index=False).encode('utf-8-sig'),
+        'faixas_exclusivas_WIN_v18.csv','text/csv',use_container_width=True,key=key_prefix+'_ranges')
+    st.download_button('⬇️ Eventos de divergência (CSV · até 500)',
+        events.to_csv(index=False).encode('utf-8-sig'),
+        'eventos_diferencas_WIN_v18.csv','text/csv',use_container_width=True,key=key_prefix+'_events')
+    st.error('🛑 Diagnóstico exploratório: 0 dias certificados, SEM BACKTEST e SEM ORDENS REAIS.')
+
+
+st.set_page_config(page_title='Trader Pro AI Elite · v1.8',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
 st.markdown("""<style>
 :root {color-scheme:dark}
 .stApp{background:radial-gradient(ellipse at 100% 0%,#1f173f 0%,#0c1020 35%,#080c16 72%);color:#edf1ff}
@@ -66,11 +133,11 @@ section[data-testid="stSidebar"]{background:#11162a}
 }
 </style>""",unsafe_allow_html=True)
 
-st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V1.7</div>
+st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V1.8</div>
 <div class="hero-title">◈ TRADER PRO AI ELITE</div>
 <div class="hero-sub">WIN · Intraday · Filtros EMA 9/21, RSI 14, ATR 14 e tendência 15m</div>
 <span class="pill">● PESQUISA SEGURA · ORDENS DESATIVADAS</span></div>''',unsafe_allow_html=True)
-st.caption('v1.7 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
+st.caption('v1.8 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
 st.markdown('### 📁 Escolha como analisar')
 source = st.radio('Fonte dos candles', ['Demonstração fictícia', 'CSV histórico 2026 · origem declarada', '🔬 Explorar 2019–2020 · SEM backtest', '🧾 Conferir CSV com ticker · SEM backtest'], index=0, horizontal=False, label_visibility='collapsed')
 st.caption('Demonstração = fictícia. Históricos = auditoria de origem declarada. O novo modo com ticker é apenas inspeção, SEM sinais ou backtest.')
@@ -150,7 +217,7 @@ elif source.startswith('🔬 Explorar'):
         except (ValueError,TypeError,pd.errors.ParserError,UnicodeError) as exc:
             st.error(f'Arquivo exploratório rejeitado: {exc}')
 elif source.startswith('🧾 Conferir'):
-    st.subheader('🧾 Inspeção de fonte com contrato — v1.7')
+    st.subheader('🧾 Inspeção de fonte com contrato — v1.8')
     st.info('Laboratório M1: confere ticker declarado, integridade OHLC, minutos ausentes e diferença entre preços originais e ajustados. NÃO faz backtest e NÃO autentica a bolsa.')
     source_m1_upload=st.file_uploader('Carregue CSV/TSV de candles de 1 minuto com coluna Contrato',
                                      type=['csv','tsv','txt'],key='source_m1_15')
@@ -822,7 +889,7 @@ with tab_data:
     st.caption('A v1.1 não baixa dados de terceiros, não verifica licenças, não acessa cotações ao vivo e não envia ordens. Resultado retrospectivo não prevê acertos futuros.')
 
 with tab_source:
-    st.subheader('🧾 Laboratório de fonte com ticker · v1.7')
+    st.subheader('🧾 Laboratório de fonte com ticker · v1.8')
     st.caption('Amostras M1 com contrato explícito. Distingue preço ORIGINAL de AJUSTADO sem afirmar que os dados são da B3. Não realiza operações.')
     if source_m1_report is None:
         st.info('Na seleção de fonte, escolha “🧾 Conferir CSV com ticker” e envie seu CSV M1 para gerar a inspeção.')
@@ -993,6 +1060,14 @@ with tab_source:
                 else:
                     st.markdown('**Eventos para revisão (prévia)**')
                     st.dataframe(ievents.head(15),use_container_width=True,hide_index=True)
+                st.divider()
+                st.subheader('🔎 Diagnóstico de divergências · v1.8')
+                st.caption('Analisa somente minutos de ticker idêntico em ambas as fontes. Preços ORIGINAIS, sem corrigir preços, horários ou usar ajustes por rolagem.')
+                dr,df_fields,df_ranges,df_events=diagnose_m1_differences(
+                    source_m1_upload.getvalue(),file_b.getvalue(),
+                    source_m1_name,provider_b,source_m1_timezone,timezone_b,
+                    source_m1_upload.name,file_b.name)
+                render_differences_v18(dr,df_fields,df_ranges,df_events,'real_v18')
                 st.download_button('⬇️ Baixar laudo de comparação v1.7 (JSON)',
                     json.dumps(ir,ensure_ascii=False,indent=2).encode('utf-8'),
                     'laudo_comparacao_fontes_win_v17.json','application/json',use_container_width=True)
@@ -1007,5 +1082,32 @@ with tab_source:
             except (ValueError,TypeError,pd.errors.ParserError,UnicodeError) as exc:
                 st.error(f'Comparação rejeitada: {exc}')
 
+
+        # v1.8: arquivos artificiais disponíveis mesmo sem arquivo B real.
+        st.divider()
+        st.subheader('🧪 Autoteste de divergências · v1.8')
+        st.info('Teste controlado com preços INVENTADOS: não representa a B3, não é outra fonte de mercado e não valida a estratégia. Serve para verificar o comparador gratuitamente.')
+        demo_a,demo_b=controlled_demo_pair()
+        st.download_button('⬇️ Exemplo sintético A (CSV)',demo_a,
+            'WINZ22_SINTETICO_A_v18.csv','text/csv',key='v18_example_a',use_container_width=True)
+        st.download_button('⬇️ Exemplo sintético B (CSV)',demo_b,
+            'WINZ22_SINTETICO_B_v18.csv','text/csv',key='v18_example_b',use_container_width=True)
+        if st.button('🔬 Executar autoteste sintético (sem upload)',key='run_v18_demo',use_container_width=True):
+            try:
+                demo_report, demo_fields, demo_ranges, demo_events=diagnose_m1_differences(
+                    demo_a,demo_b,'DADOS INVENTADOS A','DADOS INVENTADOS B',
+                    'Desconhecido','Desconhecido','SINTETICO_A.csv','SINTETICO_B.csv')
+                if (demo_report['minutos_em_comum']==19
+                    and demo_report['minutos_com_divergencia_ohlc']==2
+                    and demo_report['minutos_somente_a']==1
+                    and demo_report['minutos_somente_b']==1
+                    and demo_report['minutos_com_diferenca_volume']==1):
+                    st.success('Autoteste PASSOU: 19 minutos em comum, 2 diferenças OHLC, 1 minuto exclusivo em cada fonte e 1 diferença de volume.')
+                else:
+                    st.error('Autoteste FALHOU: resultados diferentes dos cinco cenários previstos.')
+                render_differences_v18(demo_report,demo_fields,demo_ranges,demo_events,'demo_v18')
+            except (ValueError,TypeError,pd.errors.ParserError,UnicodeError) as exc:
+                st.error(f'Autoteste rejeitado: {exc}')
+
 st.divider()
-st.caption('Trader Pro AI Elite · v1.7 · Simulador de pesquisa. Horários de referência B3 para 2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')
+st.caption('Trader Pro AI Elite · v1.8 · Simulador de pesquisa. Horários de referência B3 para 2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')

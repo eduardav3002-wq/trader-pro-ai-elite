@@ -1,3 +1,60 @@
+# ◈ Trader Pro AI Elite v1.8 — Diagnóstico detalhado de divergências
+
+**WIN intraday · Streamlit mobile-first · sem ordens reais · sem backtest validado neste laboratório**
+
+## Novidade da v1.8
+
+A v1.8 adiciona `discrepancy_lab.py` e `test_discrepancy_lab.py`, preservando os módulos da v1.7. Na aba **🧾 Fonte M1**, depois que duas fontes A e B forem carregadas, a seção **🔎 Diagnóstico de divergências · v1.8** detalha:
+
+- Número de minutos em comum, exclusivos de A ou B, e com diferenças de preços OHLC originais;
+- Para cada campo OPEN, HIGH, LOW, CLOSE: quantidade de divergências e maior/mediana diferença absoluta;
+- Faixas consecutivas de minutos presentes só em um CSV (não prova que faltou negócio no mercado);
+- Eventos categorizados como `OHLC_DIVERGENTE`, `VOLUME_DIVERGENTE`, `AUSENTE_A` e `AUSENTE_B`, com filtro e exportação;
+- Alerta **descritivo** de deslocamento constante entre OHLC A e B (não é evidência suficiente de rolagem e nunca corrige os valores);
+- Quatro downloads separados: laudo JSON, diagnóstico por OHLC CSV, faixas exclusivas CSV e até 500 eventos CSV; números totais calculados sobre os arquivos completos.
+
+### Autoteste seguro e gratuito, sem segunda fonte
+
+A tela também traz **🧪 Autoteste de divergências · v1.8** com botão `🔬 Executar autoteste sintético (sem upload)` e downloads de dois CSVs artificiais A e B. **Estes arquivos foram inventados para desenvolvimento e NÃO contêm cotações reais da B3**. O teste esperado:
+
+| Verificação no autoteste | Esperado |
+|---|---:|
+| Minutos em comum A/B | 19 |
+| Minutos com preços OHLC diferentes | 2 |
+| Minutos exclusivos de A | 1 |
+| Minutos exclusivos de B | 1 |
+| Minutos com volume diferente | 1 |
+| Total de eventos | 5 |
+| Pregões certificados | 0 |
+
+A v1.8 reutiliza a validação de ticker individual e preço de 5 pontos. Não mistura séries ajustadas e originais, não supõe fuso, não inventa candles ausentes, não alinha relógios, não corrige divergências e não interpreta deslocamentos de preços como rolagens comprovadas.
+
+### Publicar no Android via GitHub
+
+1. Extraia `Trader_Pro_AI_Elite_v1_8_GitHub.zip`. O arquivo contém **30 arquivos** de código, testes e instruções; envie todos à **raiz** do repositório que já alimenta o Streamlit, substituindo os nomes iguais. Não envie o ZIP inteiro como se fosse código.
+2. Confirme **Commit changes** na branch usada pelo Streamlit. O entrypoint continua `app.py`.
+3. Abra o aplicativo e confirme `RESEARCH TERMINAL · V1.8`.
+4. Selecione **🧾 Conferir CSV com ticker · SEM backtest** e envie a amostra WINZ22 anterior, se estiver disponível.
+5. Abra **🧾 Fonte M1** e vá até **🧪 Autoteste de divergências · v1.8**. Toque em **🔬 Executar autoteste sintético (sem upload)**: não é necessário baixar ou enviar outra fonte para conferir a detecção.
+6. Quando houver duas fontes externas documentadas, use a seção **🌐 Validação entre duas fontes · v1.7**. A v1.8 detalhará as diferenças logo abaixo da comparação.
+
+### Segurança e limitações
+
+- `0 dias certificados`, `backtest_liberado=False`, `ordens_liberadas=False` **mesmo com todos os preços idênticos**, arquivos renomeados ou deslocamento constante.
+- O cálculo de hash SHA-256 identifica arquivos iguais, mas não valida a origem. Mesmo arquivos diferentes e preços coincidentes não comprovam independência.
+- Declarar horários iguais com fusos desconhecidos NÃO comprova que as cotações representam o mesmo instante.
+- Volume numérico é tratado separadamente e pode representar unidades distintas. Dados falsos de laboratório nunca são classificados como evidências do mercado.
+- Calendário B3 e travas de outras versões não foram modificados. O motor histórico rigoroso existente continua limitado a 2026.
+- Nenhuma corretora, API de trading, conta real, execução automática ou modelo de IA treinado foi adicionado.
+
+### Verificação do código
+
+`python -m pytest -q` — **157 testes aprovados** (145 anteriores + 12 novos), incluindo extração do ZIP. **A interface Streamlit real ainda precisa ser verificada no telefone**, pois este ambiente não contém o pacote Streamlit.
+
+---
+
+## Documentação preservada da versão anterior
+
 # ◈ Trader Pro AI Elite v1.7 — Laboratório de comparação entre fontes
 
 **WIN intraday · Streamlit responsivo · estudo exploratório, sem execução de ordens**
