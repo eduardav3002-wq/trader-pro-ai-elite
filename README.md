@@ -1,3 +1,47 @@
+# ◈ Trader Pro AI Elite v1.7 — Laboratório de comparação entre fontes
+
+**WIN intraday · Streamlit responsivo · estudo exploratório, sem execução de ordens**
+
+## Novidade: comparação A × B no celular
+
+A v1.7 adiciona `independent_lab.py` e `test_independent_lab.py`. Depois de importar a **Fonte A** no modo **🧾 Conferir CSV com ticker · SEM backtest**, abra a aba **🧾 Fonte M1** e role até **🌐 Validação entre duas fontes · v1.7**. Você poderá enviar o **Arquivo B**, declarar o fornecedor, a referência documental e o fuso dele e baixar o laudo JSON e os CSVs de diferenças.
+
+O comparador exige que **ambos** sejam CSV/TSV UTF-8 de 1 minuto com colunas `Datetime,Contrato,Open,High,Low,Close`; opcionais `Volume`, `Open_Adj,High_Adj,Low_Adj,Close_Adj,Ajuste`. Os campos ajustados **não são utilizados na comparação entre fontes**: são comparados somente os quatro preços **ORIGINAIS**. Os dois arquivos passam pelas verificações anteriores de ticker WIN individual, grade mínima de cinco pontos, OHLC consistente, timestamps sem segundos, registros ordenados e ausência de duplicatas.
+
+**Comparação rigorosa:** correspondência EXATA em `(Datetime, Contrato)`; não converte fusos, não mistura tickers, não inventa candles, não arredonda preços, não compara séries ajustadas com originais e não assume dados diários como se fossem intradiários. Minutos exclusivos de A ou B são contados separadamente. Se ambos contêm a coluna `Volume`, compara os números como diagnóstico separado, **sem** assumir que volume real e tick volume têm a mesma unidade. A diferença OHLC máxima é exibida. O relatório por dia preserva a classificação `NAO_AUTENTICADO`. O arquivo de eventos é limitado aos **primeiros 500** registros para desempenho no telefone; os totais incluem todos os registros.
+
+**Independência e licenciamento:** dois nomes diferentes ou duas URLs diferentes não comprovam fontes independentes. Mesmo SHA-256 indica o mesmo arquivo. Mesmo preços em todos os minutos não certificam B3, origem, fuso, contratos ou uso autorizado. Se as fontes declararem fusos diferentes, o app sinaliza a incompatibilidade. Se forem desconhecidos, qualquer coincidência é apenas dos horários escritos nos CSVs. A B3 disponibiliza produtos especializados de dados intradiários; arquivos gratuitos podem não ter documentação suficiente. Não baixe material de fontes não autorizadas nem compartilhe históricos com licenças restritas.
+
+## Instruções pelo Android
+
+1. Baixe e **extraia** `Trader_Pro_AI_Elite_v1_7_GitHub.zip`.
+2. No repositório GitHub que alimenta o Streamlit existente, envie os **28 arquivos** extraídos para a **raiz**, substituindo os que já têm o mesmo nome, e confirme **Commit changes**. O arquivo de início continua sendo `app.py`.
+3. Abra o mesmo site do Streamlit e confira o título `RESEARCH TERMINAL · V1.7`. Se a atualização não aparecer, recarregue a página e confira os logs do Streamlit Cloud.
+4. Escolha **🧾 Conferir CSV com ticker · SEM backtest**, envie seu arquivo `WINZ22_M1_2022-10-31` já utilizado na v1.6 e mantenha o fuso **Desconhecido** se ele ainda não foi verificado.
+5. Entre em **🧾 Fonte M1** e role até **🌐 Validação entre duas fontes · v1.7**. Carregue outro arquivo M1 do **mesmo contrato**, do **mesmo período**, se existir, e informe seu fornecedor declarado e fuso.
+6. **Se você ainda não tem o arquivo B:** não precisa contratar plataforma, nem preencher uma fonte falsa. Pode testar a interface enviando **o mesmo arquivo** também como B; o aplicativo deverá avisar **MESMO ARQUIVO — NÃO INDEPENDENTE**. Esse teste técnico não valida o histórico.
+7. Baixe `laudo_comparacao_fontes_win_v17.json` e envie para análise quando uma segunda fonte real estiver disponível.
+
+## Estado de segurança
+
+- O código **não** importa comparação A × B para o motor de sinais ou o backtest. O laboratório mantém **0 pregões certificados, nenhuma ordem habilitada, nenhum backtest validado**.
+- Mantém intactos os bloqueios de calendário B3 e demais testes da versão anterior. O calendário do motor continua restrito ao ano **2026**.
+- Não contém conta de corretora, chave de API, conexão de negociação, preços ao vivo ou IA treinada.
+- A ferramenta não substitui fontes oficiais, documentação da corretora, validação financeira, dados com licença adequada, nem uma auditoria independente.
+
+## Verificação
+
+`python -m pytest -q` — **145 testes aprovados** (126 anteriores + 19 novos).
+
+A suíte exercita a lógica Python; **a tela Streamlit ainda precisa ser testada na publicação real**. O ambiente local de preparação não dispõe do pacote Streamlit.
+
+Fontes úteis para investigação (NÃO usadas automaticamente pelo aplicativo):
+- B3 DataWise — https://b3.com.br/pt_br/market-data-e-indices/servicos-de-dados/datawise/dados-disponiveis/
+- MetaTrader 5 — https://www.metatrader5.com/en/terminal/help/trading/market_watch
+
+---
+
+## Documentação técnica preservada da v1.6
 # ◈ Trader Pro AI Elite v1.6 — Comparação matemática de preços
 
 **WIN intraday · Streamlit mobile-first · pesquisa, sem ordens reais · 126 testes de código.**

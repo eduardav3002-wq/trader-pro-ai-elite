@@ -1,4 +1,4 @@
-"""Trader Pro AI Elite v1.6 — validação matemática de preços, sem ordens."""
+"""Trader Pro AI Elite v1.7 — comparação entre fontes, sem ordens."""
 import json
 
 import pandas as pd
@@ -16,9 +16,10 @@ from integrity_lab import assess_integrity, compare_daily_export
 from traceability_lab import read_contract_map, traceability_audit, EMPTY_TEMPLATE
 from source_lab import inspect_ticker_m1
 from cross_price_lab import audit_cross_prices, compare_v15_receipt
+from independent_lab import compare_independent_m1
 from engine import analyze, demo_data, HOLIDAYS_2026, market_day_gate, signal_entry_gate, ENTRY_GATE_LABELS
 
-st.set_page_config(page_title='Trader Pro AI Elite · v1.6',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
+st.set_page_config(page_title='Trader Pro AI Elite · v1.7',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
 st.markdown("""<style>
 :root {color-scheme:dark}
 .stApp{background:radial-gradient(ellipse at 100% 0%,#1f173f 0%,#0c1020 35%,#080c16 72%);color:#edf1ff}
@@ -65,11 +66,11 @@ section[data-testid="stSidebar"]{background:#11162a}
 }
 </style>""",unsafe_allow_html=True)
 
-st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V1.6</div>
+st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V1.7</div>
 <div class="hero-title">◈ TRADER PRO AI ELITE</div>
 <div class="hero-sub">WIN · Intraday · Filtros EMA 9/21, RSI 14, ATR 14 e tendência 15m</div>
 <span class="pill">● PESQUISA SEGURA · ORDENS DESATIVADAS</span></div>''',unsafe_allow_html=True)
-st.caption('v1.6 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
+st.caption('v1.7 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
 st.markdown('### 📁 Escolha como analisar')
 source = st.radio('Fonte dos candles', ['Demonstração fictícia', 'CSV histórico 2026 · origem declarada', '🔬 Explorar 2019–2020 · SEM backtest', '🧾 Conferir CSV com ticker · SEM backtest'], index=0, horizontal=False, label_visibility='collapsed')
 st.caption('Demonstração = fictícia. Históricos = auditoria de origem declarada. O novo modo com ticker é apenas inspeção, SEM sinais ou backtest.')
@@ -149,7 +150,7 @@ elif source.startswith('🔬 Explorar'):
         except (ValueError,TypeError,pd.errors.ParserError,UnicodeError) as exc:
             st.error(f'Arquivo exploratório rejeitado: {exc}')
 elif source.startswith('🧾 Conferir'):
-    st.subheader('🧾 Inspeção de fonte com contrato — v1.5')
+    st.subheader('🧾 Inspeção de fonte com contrato — v1.7')
     st.info('Laboratório M1: confere ticker declarado, integridade OHLC, minutos ausentes e diferença entre preços originais e ajustados. NÃO faz backtest e NÃO autentica a bolsa.')
     source_m1_upload=st.file_uploader('Carregue CSV/TSV de candles de 1 minuto com coluna Contrato',
                                      type=['csv','tsv','txt'],key='source_m1_15')
@@ -821,7 +822,7 @@ with tab_data:
     st.caption('A v1.1 não baixa dados de terceiros, não verifica licenças, não acessa cotações ao vivo e não envia ordens. Resultado retrospectivo não prevê acertos futuros.')
 
 with tab_source:
-    st.subheader('🧾 Laboratório de fonte com ticker · v1.6')
+    st.subheader('🧾 Laboratório de fonte com ticker · v1.7')
     st.caption('Amostras M1 com contrato explícito. Distingue preço ORIGINAL de AJUSTADO sem afirmar que os dados são da B3. Não realiza operações.')
     if source_m1_report is None:
         st.info('Na seleção de fonte, escolha “🧾 Conferir CSV com ticker” e envie seu CSV M1 para gerar a inspeção.')
@@ -935,5 +936,76 @@ with tab_source:
                     except (ValueError,TypeError) as exc:
                         st.error(f'Não foi possível comparar o laudo: {exc}')
 
+
+        # v1.7: comparação entre dois arquivos externos, isolada do motor de trading.
+        st.divider()
+        st.subheader('🌐 Validação entre duas fontes · v1.7')
+        st.caption('Compara APENAS OHLC ORIGINAIS em minutos M1 com ticker e timestamp exatamente iguais. Não usa preços ajustados para simular execução, nem presume fuso, independência ou rolagem.')
+        st.warning('🛑 Fonte A é o arquivo já carregado acima. Fonte B precisa ser outra exportação com ticker e minutos. Até comprovar a origem independente das duas, o histórico permanece NÃO CERTIFICADO.')
+        file_b=st.file_uploader('Arquivo B · outra fonte (CSV, TSV ou TXT)',type=['csv','tsv','txt'],key='second_source_m1_v17')
+        with st.expander('🧾 Declarações e referências da segunda fonte',expanded=True):
+            provider_b=st.text_input('Fonte B declarada',placeholder='Ex.: instituição/fornecedor B',key='second_provider_v17')
+            reference_a=st.text_input('Referência documental da fonte A (opcional)',placeholder='Link de onde veio o arquivo A',key='reference_a_v17')
+            reference_b=st.text_input('Referência documental da fonte B (opcional)',placeholder='Link do fornecedor ou documentação B',key='reference_b_v17')
+            timezone_b=st.selectbox('Fuso original declarado · fonte B', ['Desconhecido','America/Sao_Paulo (declarado)'],key='timezone_b_v17')
+            st.caption('As referências são apenas declarações; não são verificadas automaticamente. As datas NÃO são convertidas entre fusos. Não use dados contínuos ou de outro contrato como se fossem equivalentes.')
+        if file_b is None:
+            st.info('Sem arquivo B: comparação ainda não executada. O CSV original WINZ22 pode ser carregado como teste de interface, mas o app avisará que NÃO é uma fonte independente.')
+        elif not provider_b.strip():
+            st.warning('Informe a fonte B declarada antes de comparar os arquivos.')
+        else:
+            try:
+                ir, idaily, ievents=compare_independent_m1(
+                    source_m1_upload.getvalue(), file_b.getvalue(),
+                    source_m1_name, provider_b,source_m1_timezone,timezone_b,
+                    source_m1_upload.name,file_b.name,reference_a,reference_b)
+                i1,i2=st.columns(2)
+                i1.metric('Minutos comparáveis',ir['candles_com_mesmo_ticker_e_minuto'])
+                i2.metric('OHLC idênticos',ir['candles_ohlc_identicos'])
+                i1.metric('OHLC divergentes',ir['candles_ohlc_divergentes'])
+                i2.metric('Minutos só em A / B',f"{ir['candles_apenas_a']} / {ir['candles_apenas_b']}")
+                if ir['volumes_comparaveis_numericamente']:
+                    st.caption(f"Diferenças numéricas de volume: {ir['candles_com_volume_diferente']} candle(s). Atenção: unidades de volume e tick volume podem não ser equivalentes.")
+                else:
+                    st.caption('Volume não foi comparado: campo ausente em pelo menos um arquivo.')
+                st.markdown('**Classificação da evidência**')
+                if ir['classificacao']=='MESMO_ARQUIVO_NAO_INDEPENDENTE':
+                    st.error('MESMO ARQUIVO: SHA-256 idêntico. A comparação não é independente.')
+                elif ir['classificacao']=='FUSOS_DECLARADOS_INCOMPATIVEIS':
+                    st.error('Fusos declarados diferentes. Valores comparados somente pelo texto dos timestamps; NÃO interpretar as coincidências como o mesmo instante.')
+                elif ir['classificacao']=='SEM_SOBREPOSICAO_EXATA':
+                    st.warning('Sem coincidência exata entre ticker e minuto. Não há comparação de preços possível.')
+                elif ir['classificacao']=='PRECOS_DIVERGENTES':
+                    st.warning('DIVERGÊNCIAS entre os preços originais das duas séries. Investigação necessária.')
+                else:
+                    st.info('Preços originais coincidem nos minutos comparados. Isso NÃO comprova independência nem autenticidade.')
+                for alert in ir['avisos']:
+                    st.caption('• '+str(alert))
+                st.error('🛑 Nenhuma sessão certificada · SEM BACKTEST · SEM ORDENS REAIS.')
+                st.markdown('**📱 Resumo por dia**')
+                for rec in idaily.head(8).to_dict('records'):
+                    with st.container(border=True):
+                        st.markdown('**'+str(rec['dia'])+' · '+str(rec['ticker'])+'**')
+                        st.write(f"{rec['precos_identicos']} OHLC idênticos · {rec['divergencias_ohlc']} divergentes")
+                        st.caption(f"Minutos ausentes A/B: {rec['apenas_fonte_a']} / {rec['apenas_fonte_b']} · NÃO AUTENTICADO")
+                if ievents.empty:
+                    st.caption('Nenhum evento de diferença entre os minutos que coincidem. Isso não valida a origem.')
+                else:
+                    st.markdown('**Eventos para revisão (prévia)**')
+                    st.dataframe(ievents.head(15),use_container_width=True,hide_index=True)
+                st.download_button('⬇️ Baixar laudo de comparação v1.7 (JSON)',
+                    json.dumps(ir,ensure_ascii=False,indent=2).encode('utf-8'),
+                    'laudo_comparacao_fontes_win_v17.json','application/json',use_container_width=True)
+                st.download_button('⬇️ Baixar comparação por dia v1.7 (CSV)',
+                    idaily.to_csv(index=False).encode('utf-8-sig'),
+                    'comparacao_fontes_por_dia_v17.csv','text/csv',use_container_width=True)
+                st.download_button('⬇️ Baixar eventos v1.7 (CSV · até 500 linhas)',
+                    ievents.to_csv(index=False).encode('utf-8-sig'),
+                    'eventos_comparacao_fontes_v17.csv','text/csv',use_container_width=True)
+                if ir['eventos_truncados']:
+                    st.warning(f"Relatório de eventos limitado a 500 registros para uso no celular ({ir['linhas_evento_total']} no total). Os totais do diagnóstico consideram todos os registros.")
+            except (ValueError,TypeError,pd.errors.ParserError,UnicodeError) as exc:
+                st.error(f'Comparação rejeitada: {exc}')
+
 st.divider()
-st.caption('Trader Pro AI Elite · v1.6 · Simulador de pesquisa. Horários de referência B3 para 2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')
+st.caption('Trader Pro AI Elite · v1.7 · Simulador de pesquisa. Horários de referência B3 para 2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')
