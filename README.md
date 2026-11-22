@@ -1,4 +1,4 @@
-# ◈ Trader Pro AI Elite v1.1 — pesquisa de qualidade histórica (celular primeiro)
+# ◈ Trader Pro AI Elite v1.2 — pesquisa de qualidade histórica (celular primeiro)
 
 Aplicativo Streamlit **experimental**, visual premium escuro/roxo, sem IA treinada, corretora, cotações ao vivo ou ordens reais. **Não há taxa de acerto comprovada nem garantia de ganho**.
 
@@ -6,15 +6,25 @@ Aplicativo Streamlit **experimental**, visual premium escuro/roxo, sem IA treina
 
 1. Baixe e **extraia** o arquivo `Trader_Pro_AI_Elite_v1_1_GitHub.zip`.
 2. Abra **o mesmo repositório GitHub** que já está ligado ao seu Streamlit Community Cloud.
-3. Use **Add file → Upload files** e escolha **os 16 arquivos extraídos** (não o ZIP). Substitua os arquivos antigos de mesmo nome e acrescente `historical.py` e `test_historical.py`.
+3. Use **Add file → Upload files** e escolha **os 18 arquivos extraídos** (não o ZIP). Substitua os arquivos antigos de mesmo nome e acrescente os novos arquivos `quality_lab.py` e `test_quality_lab.py`.
 4. Confirme **Commit changes** na `main`. O aplicativo continua apontando para **`app.py`**.
-5. Abra o endereço Streamlit existente. No cabeçalho, procure **RESEARCH TERMINAL · V1.1**.
+5. Abra o endereço Streamlit existente. No cabeçalho, procure **RESEARCH TERMINAL · V1.2**.
 6. Selecione **🔬 Explorar 2019–2020 · SEM backtest** e carregue o arquivo `WIN_2019_2020_5min_exploratorio.csv` já recebido, **ou** o `data.csv` original. Veja a aba **🔬 Histórico**.
 7. A fonte declarada pode ser `GitHub — FGV_Trabalho_WIN (origem primária não verificada)`; é apenas uma declaração, não um aval da B3.
 
-Não é necessário pagar Replit ou instalar Python no celular. A instalação automática do Streamlit Cloud pode requerer alguns ajustes de hospedagem. A barra superior **Manage app** pertence ao Streamlit Cloud e pode continuar visível no navegador móvel.
+Não é necessário pagar Replit ou instalar Python no celular. A instalação automática do Streamlit Cloud pode requerer alguns ajustes de hospedagem. A barra superior **Manage app** pertence ao Streamlit Cloud e pode continuar visível no navegador móvel. O app não controla o navegador do usuário.
 
-## O que mudou na v1.1
+## Novidades importantes — v1.2 (Laboratório de Qualidade)
+
+- Novos módulos `quality_lab.py` e `test_quality_lab.py`: classificação reprodutível por dia, sem alterar as decisões do motor de sinais ou abrir backtest do CSV 2019–2020.
+- Filtros para **dias com alerta**, **todos os dias**, **lacunas internas**, **abertura divergente**, **vencimento nominal**, **proximidade de vencimento** e **sem alertas locais**.
+- Métrica de **trechos consecutivos entre candles observados** (NÃO mede completude de pregão); os resultados podem ser baixados em CSV e JSON.
+- Vencimentos calculados novamente pela data: **10/02/2020 é proximidade de rolagem**, e **12/02/2020 é vencimento nominal**. O relatório gerado localmente pela v1.1 estava correto, embora um print da interface mostrasse o primeiro dia com um rótulo a mais. A v1.2 sinaliza qualquer discordância entre o rótulo antigo e a data.
+- **97 dias sem alertas locais** na amostra pública fornecida; permanecem TODOS **não certificados**. Atribuir status sem alerta local **não autoriza backtest**, nem infere origem primária, contrato, preços, encerramento ou continuidade da sessão completa.
+- Na amostra observada: **181 dias**, **15 com lacunas**, **64 com abertura divergente** e **5 vencimentos nominais**. Os grupos podem se sobrepor.
+- **64 testes de código aprovados** no ambiente de desenvolvimento, inclusive as regressões v1.1 e a distinção 10/02 vs 12/02. Ainda é necessário testar o Streamlit após o commit.
+
+## O que mudou na v1.2
 
 - **Novo modo separado, EXPLORATÓRIO, para 2019–2020**: aceita CSV já convertido para 5 minutos ou CSV/TSV original com DATE, TIME, OPEN, HIGH, LOW, CLOSE, VOL (1 minuto). CSV é processado no Streamlit Cloud, não há download automático de preços pela aplicação.
 - **Conversão conservadora 1m → 5m**: um candle 5m só é gerado se os cinco minutos exatos estiverem presentes. Janelas parciais são descartadas e contabilizadas. Não cria preços, preenche lacunas ou arredonda ticks fora da grade de 5 pontos.

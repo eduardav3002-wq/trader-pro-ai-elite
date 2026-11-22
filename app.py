@@ -1,4 +1,4 @@
-"""Trader Pro AI Elite v1.1 — pesquisa mobile-first, sem corretora nem ordens."""
+"""Trader Pro AI Elite v1.2 — pesquisa mobile-first, sem corretora nem ordens."""
 import json
 
 import pandas as pd
@@ -11,9 +11,10 @@ from research import robustness_report
 from validation import chronological_validation
 from provenance import inspect_historical_csv
 from historical import audit_exploratory_csv, historical_day_gate, CLOSED_2019, CLOSED_2020, CALENDAR_SOURCES
+from quality_lab import quality_triage
 from engine import analyze, demo_data, HOLIDAYS_2026, market_day_gate, signal_entry_gate, ENTRY_GATE_LABELS
 
-st.set_page_config(page_title='Trader Pro AI Elite · v1.1',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
+st.set_page_config(page_title='Trader Pro AI Elite · v1.2',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
 st.markdown("""<style>
 :root {color-scheme:dark}
 .stApp{background:radial-gradient(ellipse at 100% 0%,#1f173f 0%,#0c1020 35%,#080c16 72%);color:#edf1ff}
@@ -60,11 +61,11 @@ section[data-testid="stSidebar"]{background:#11162a}
 }
 </style>""",unsafe_allow_html=True)
 
-st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V1.1</div>
+st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V1.2</div>
 <div class="hero-title">◈ TRADER PRO AI ELITE</div>
 <div class="hero-sub">WIN · Intraday · Filtros EMA 9/21, RSI 14, ATR 14 e tendência 15m</div>
 <span class="pill">● PESQUISA SEGURA · ORDENS DESATIVADAS</span></div>''',unsafe_allow_html=True)
-st.caption('v1.1 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
+st.caption('v1.2 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
 st.markdown('### 📁 Escolha como analisar')
 source = st.radio('Fonte dos candles', ['Demonstração fictícia', 'CSV histórico 2026 · origem declarada', '🔬 Explorar 2019–2020 · SEM backtest'], index=0, horizontal=False, label_visibility='collapsed')
 st.caption('Demonstração = dados fictícios. Histórico 2026 = validação estrita por contrato. Explorar 2019–2020 = auditoria sem sinais/backtest.')
@@ -73,7 +74,7 @@ with st.sidebar:
     chart_bars=st.slider('Candles no gráfico',30,180,75,15)
     show_ema=st.toggle('Exibir médias móveis',True)
     profile_ui=st.radio('Perfil de pesquisa',
-                        ['Seletivo v1.1 (experimental)','Base v0.5 (comparação)'],index=0)
+                        ['Seletivo v1.1 (mesma regra, pesquisa)','Base v0.5 (comparação)'],index=0)
     profile='seletivo' if profile_ui.startswith('Seletivo') else 'base'
     st.caption('Seletivo aplica filtros de volatilidade/candles. Valores escolhidos para demonstrar regras, NÃO ajustados ao WIN real.')
     st.divider()
@@ -113,7 +114,7 @@ if source.startswith('CSV histórico'):
             out=analyze(checked,contract=contract,profile=profile)
             st.warning('Estrutura e continuidade aprovadas. COTAÇÕES NÃO AUTENTICADAS: o aplicativo não consegue atestar que preços existiram na B3.')
             st.caption(f"Contrato: {contract} · {provenance['pregoes_completos']} pregões inteiros · SHA-256: {provenance['sha256'][:16]}…")
-            st.download_button('⬇️ Baixar comprovante de triagem JSON', json.dumps(provenance,ensure_ascii=False,indent=2).encode('utf-8'), 'triagem_win_v11.json', 'application/json', use_container_width=True)
+            st.download_button('⬇️ Baixar comprovante de triagem JSON', json.dumps(provenance,ensure_ascii=False,indent=2).encode('utf-8'), 'triagem_win_v12.json', 'application/json', use_container_width=True)
         except (ValueError,TypeError,pd.errors.ParserError,UnicodeError) as exc:
             st.error(f'CSV rejeitado: {exc}')
             st.caption('Confira: contrato específico, horário de abertura em Brasília, todos os candles de cada sessão e pregões consecutivos.')
@@ -169,31 +170,65 @@ with tab_historic:
             st.info(f"Conversão interna 1m → 5m: {r['conversao']['janelas_parciais_descartadas']} janelas incompletas descartadas; nenhum valor criado ou interpolado.")
         if r['pregoes_ausentes']:
             st.error('Datas esperadas sem registros: '+ ', '.join(r['pregoes_esperados_ausentes'][:12]))
-        st.subheader('📱 Dias com alertas: lista legível no celular')
-        flagged=historical_daily[(historical_daily.lacunas_internas>0) |
-                    (historical_daily.primeiro_candle!=historical_daily.abertura_referencia) |
-                    historical_daily.alertas.str.contains('VENCIMENTO',na=False)]
-        st.caption(f'{len(flagged)} dias com algum alerta específico. Cada dia observado ainda exige confirmação de encerramento e origem.')
-        for rec in flagged.head(25).to_dict('records'):
+        st.subheader('🧬 Laboratório de Qualidade v1.2')
+        st.caption('Triagem descritiva — separa lacunas, aberturas e datas de rolagem. Nenhum dia é certificado, mesmo quando não aparece um alerta local.')
+        triage,quality_summary=quality_triage(historical_candles,historical_daily,historical_gaps)
+        q1,q2=st.columns(2)
+        q1.metric('Dias com abertura divergente',quality_summary['dias_com_abertura_divergente'])
+        q2.metric('Dias com lacunas',quality_summary['dias_com_lacunas'])
+        q1.metric('Dias sem alerta local',quality_summary['dias_sem_alerta_local'])
+        q2.metric('Divergências nos alertas',quality_summary['dias_com_discordancia_anterior'])
+        st.warning('🛑 TODOS os dias: contrato, origem das cotações e encerramento NÃO CERTIFICADOS. “Sem alertas locais” NÃO equivale a apto para operar.')
+        st.info('🔎 Conferência de vencimento: **10/02/2020 = próximo ao vencimento**; **12/02/2020 = vencimento nominal**. Os rótulos são recalculados pelas datas, independentemente do texto do relatório antigo.')
+        if quality_summary['dias_com_discordancia_anterior']:
+            st.error('Encontramos divergências entre datas nominais e rótulos anteriores; confira o CSV de triagem antes de qualquer análise adicional.')
+        chosen=st.selectbox('Filtrar pregões por problema',[
+            'Dias com alerta','Todos os pregões','Lacunas internas','Abertura divergente',
+            'Vencimento nominal','Proximidade de vencimento','Sem alertas locais'
+        ],key='quality_filter_v12')
+        if chosen=='Lacunas internas':
+            selection=triage[triage.lacunas_internas>0]
+        elif chosen=='Abertura divergente':
+            selection=triage[triage.primeiro_candle!=triage.abertura_referencia]
+        elif chosen=='Vencimento nominal':
+            selection=triage[triage.vencimento_nominal]
+        elif chosen=='Proximidade de vencimento':
+            selection=triage[triage.proximo_de_vencimento]
+        elif chosen=='Sem alertas locais':
+            selection=triage[triage.classe_principal=='SEM_ALERTAS_LOCAIS']
+        elif chosen=='Todos os pregões':
+            selection=triage
+        else:
+            selection=triage[triage.classe_principal!='SEM_ALERTAS_LOCAIS']
+        st.caption(f'{len(selection)} dias na seleção. Mostrando até 12 cartões no celular; CSV completo disponível abaixo.')
+        for rec in selection.head(12).to_dict('records'):
             with st.container(border=True):
                 st.markdown('**'+rec['dia']+'**')
-                st.write(f"{rec['candles_5min']} candles · {rec['primeiro_candle']} até {rec['ultimo_candle']} · {rec['lacunas_internas']} lacuna(s)")
-                st.caption(rec['alertas'].replace('; ',' · '))
-        if len(flagged)>25:
-            st.caption(f'Mostrando os primeiros 25 de {len(flagged)} dias com alerta. Baixe o relatório completo abaixo.')
-        with st.expander('Ver todos os dias e os saltos em tabela'):
+                st.write(f"{rec['candles_5min']} candles · {rec['primeiro_candle']}–{rec['ultimo_candle']} · {rec['trechos_continuos_observados']} trechos internos")
+                st.caption(rec['motivos'])
+                st.caption('Não certificado · Backtest bloqueado')
+        if len(selection)>12:
+            st.caption('Exibindo 12 cartões; veja todas as datas pelo CSV.')
+        with st.expander('🔍 Ver todas as datas, lacunas e trechos em tabela'):
+            st.dataframe(triage,use_container_width=True,hide_index=True)
             st.dataframe(historical_daily,use_container_width=True,hide_index=True)
             if not historical_gaps.empty:
                 st.dataframe(historical_gaps,use_container_width=True,hide_index=True)
+        st.download_button('⬇️ Baixar triagem de qualidade v1.2 (CSV)',
+            triage.to_csv(index=False).encode('utf-8-sig'),
+            'triagem_qualidade_win_v12.csv','text/csv',use_container_width=True)
+        st.download_button('⬇️ Baixar resumo do laboratório v1.2 (JSON)',
+            json.dumps(quality_summary,ensure_ascii=False,indent=2).encode('utf-8'),
+            'resumo_qualidade_win_v12.json','application/json',use_container_width=True)
         st.download_button('⬇️ Baixar relatório exploratório (JSON)',
             json.dumps(r,ensure_ascii=False,indent=2).encode('utf-8'),
-            'auditoria_exploratoria_win_v11.json','application/json',use_container_width=True)
+            'auditoria_exploratoria_win_v12.json','application/json',use_container_width=True)
         st.download_button('⬇️ Baixar qualidade por dia (CSV)',
             historical_daily.to_csv(index=False).encode('utf-8-sig'),
-            'qualidade_por_dia_win_v11.csv','text/csv',use_container_width=True)
+            'qualidade_por_dia_win_v12.csv','text/csv',use_container_width=True)
         st.download_button('⬇️ Baixar lacunas internas (CSV)',
             historical_gaps.to_csv(index=False).encode('utf-8-sig'),
-            'lacunas_win_v11.csv','text/csv',use_container_width=True)
+            'lacunas_win_v12.csv','text/csv',use_container_width=True)
         st.caption('Dados do usuário, horários de Brasília DECLARADOS (não comprovados). Não confundir ausência de pregões inteiros com ausência de lacunas intradiárias.')
     st.markdown('**Calendário histórico: fontes**')
     st.markdown('\n'.join([f"- [B3: calendário de 2019]({CALENDAR_SOURCES['2019']})",
@@ -600,4 +635,4 @@ with tab_data:
     st.caption('A v1.1 não baixa dados de terceiros, não verifica licenças, não acessa cotações ao vivo e não envia ordens. Resultado retrospectivo não prevê acertos futuros.')
 
 st.divider()
-st.caption('Trader Pro AI Elite · v1.1 · Simulador de pesquisa. Horários de referência B3 para 2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')
+st.caption('Trader Pro AI Elite · v1.2 · Simulador de pesquisa. Horários de referência B3 para 2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')
