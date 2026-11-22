@@ -1,4 +1,4 @@
-"""Trader Pro AI Elite v0.8 — pesquisa mobile-first, sem corretora nem ordens."""
+"""Trader Pro AI Elite v0.9 — pesquisa mobile-first, sem corretora nem ordens."""
 import hashlib
 import io
 import json
@@ -10,13 +10,18 @@ import streamlit as st
 from audit import audit_trades
 from backtest import backtest
 from research import robustness_report
+from validation import chronological_validation
 from engine import analyze, demo_data, HOLIDAYS_2026, market_day_gate, signal_entry_gate, ENTRY_GATE_LABELS
 
-st.set_page_config(page_title='Trader Pro AI Elite · v0.8',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
+st.set_page_config(page_title='Trader Pro AI Elite · v0.9',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
 st.markdown("""<style>
 :root {color-scheme:dark}
 .stApp{background:radial-gradient(ellipse at 100% 0%,#1f173f 0%,#0c1020 35%,#080c16 72%);color:#edf1ff}
-.block-container{max-width:1160px;padding:1rem 1rem 3.4rem}
+/* Mantém a primeira ação abaixo da barra nativa fixa do Streamlit. */
+.block-container{max-width:1160px;padding:5rem 1rem 3.4rem}
+html{scroll-padding-top:5rem}
+[data-testid="stHeader"]{background:#0b0d19ee!important;min-height:3.1rem}
+[data-testid="stAppViewContainer"]{overflow-x:hidden}
 header[data-testid="stHeader"]{background:transparent}
 #MainMenu,footer{visibility:hidden}
 h1,h2,h3{letter-spacing:-.025em;color:#f2f1ff}
@@ -39,30 +44,33 @@ section[data-testid="stSidebar"]{background:#11162a}
 .signal strong{font-size:1.55rem}.muted{color:#b2bed5;font-size:.88rem}
 .micro-note{color:#c2c3db;font-size:.8rem}
 @media(max-width:640px){
- .block-container{padding:.6rem .65rem 2rem}
+ .block-container{padding:5.4rem .65rem 2.4rem}
  .hero{padding:19px 15px;border-radius:17px}
  .hero-title{font-size:1.7rem}
  .hero-sub{font-size:.8rem}
  .signal{padding:15px}
  [data-testid="stMetric"]{padding:11px;border-radius:12px}
  [data-testid="stMetricValue"]{font-size:1.2rem}
- [data-baseweb="tab"]{padding:10px 9px}
+ [data-baseweb="tab"]{padding:12px 10px}
+ .stButton button,.stDownloadButton button{white-space:normal;line-height:1.2;min-height:50px}
+ [data-testid="stMetricLabel"]{font-size:.8rem}
+ [data-testid="stDataFrame"]{max-width:100%}
  h2{font-size:1.35rem!important}
 }
 </style>""",unsafe_allow_html=True)
 
-st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V0.8</div>
+st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V0.9</div>
 <div class="hero-title">◈ TRADER PRO AI ELITE</div>
 <div class="hero-sub">WIN · Intraday · Filtros EMA 9/21, RSI 14, ATR 14 e tendência 15m</div>
 <span class="pill">● PESQUISA SEGURA · ORDENS DESATIVADAS</span></div>''',unsafe_allow_html=True)
-st.caption('v0.8 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
+st.caption('v0.9 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
 with st.sidebar:
     st.header('⚙️ Central de controle')
     source=st.radio('Fonte dos dados',['Demonstração fictícia','CSV histórico · origem declarada'],index=0)
     chart_bars=st.slider('Candles no gráfico',30,180,75,15)
     show_ema=st.toggle('Exibir médias móveis',True)
     profile_ui=st.radio('Perfil de pesquisa',
-                        ['Seletivo v0.8 (experimental)','Base v0.5 (comparação)'],index=0)
+                        ['Seletivo v0.9 (experimental)','Base v0.5 (comparação)'],index=0)
     profile='seletivo' if profile_ui.startswith('Seletivo') else 'base'
     st.caption('Seletivo aplica filtros de volatilidade/candles. Valores escolhidos para demonstrar regras, NÃO ajustados ao WIN real.')
     st.divider()
@@ -134,7 +142,7 @@ with tab_terminal:
                      else ENTRY_GATE_LABELS.get(gate,'Bloqueio de calendário/horário'))
         st.markdown(f'''<div class="signal" style="border-left:5px solid {palette[display_signal]}"><div class="muted">ÚLTIMO CANDLE CARREGADO · {profile_ui}</div>
         <strong style="color:{palette[display_signal]}">{display_signal}</strong><div class="muted">{reason_text}</div></div>''',unsafe_allow_html=True)
-        st.caption('Sinal retrospectivo. Não é cotação ao vivo nem recomendação para operar. NOVAS ordens seguem desligadas.')
+        st.caption('Sinal retrospectivo. Não é cotação ao vivo nem recomendação para operar. NOVAS ordens seguem desligadas. A classificação de evidência fica na aba Robustez.')
         left,right=st.columns(2)
         left.metric('Fechamento (pontos)',f'{last["close"]:,.0f}'.replace(',','.'))
         right.metric('RSI 14',f'{last["rsi"]:.1f}'.replace('.',','))
@@ -215,7 +223,7 @@ with tab_decision:
                          'atr','atr_ratio','candle_atr','trend','trend15']]
         st.download_button('Baixar decisões e todos os bloqueios (CSV)',
                            diag_export.to_csv(index=False).encode('utf-8-sig'),
-                           'decisoes_trader_pro_ai_elite_v08.csv','text/csv',
+                           'decisoes_trader_pro_ai_elite_v09.csv','text/csv',
                            use_container_width=True)
 
 with tab_bt:
@@ -234,7 +242,7 @@ with tab_bt:
             max_hold=st.number_input('Duração máxima (candles de 5 min)',min_value=1,max_value=100,value=12,step=1)
             daily_loss=st.number_input('Limite de perda diária realizada (pontos)',min_value=0.0,value=200.0,step=25.0)
             st.caption(f'Hipótese: {cost:.1f} pts de taxas + {2*slip*5} pts de slippage por operação.')
-        enable_risk=st.checkbox('Ativar travas extras v0.8 (experimentais)',value=profile=='seletivo')
+        enable_risk=st.checkbox('Ativar travas extras v0.9 (experimentais)',value=profile=='seletivo')
         if enable_risk:
             r1,r2,r3=st.columns(3)
             max_risk=r1.number_input('Risco máximo do stop (pts)',min_value=5.0,value=125.0,step=5.0)
@@ -245,8 +253,8 @@ with tab_bt:
             max_risk=None
             loss_streak=None
             min_rr=0.0
-        run=st.button('Executar backtest v0.8',type='primary',use_container_width=True)
-        compare=st.button('Comparar base v0.5 × seletivo v0.8 (mesmos parâmetros)',use_container_width=True)
+        run=st.button('Executar backtest v0.9',type='primary',use_container_width=True)
+        compare=st.button('Comparar base v0.5 × seletivo v0.9 (mesmos parâmetros)',use_container_width=True)
         if compare:
             try:
                 raw_data=demo_data() if source=='Demonstração fictícia' else raw
@@ -305,16 +313,20 @@ with tab_bt:
                     decision_counts=(attempts.groupby('decisao',as_index=False).size()
                                      .rename(columns={'decisao':'Decisão','size':'Quantidade'}))
                     st.dataframe(decision_counts,hide_index=True,use_container_width=True)
+                    hard_blocks=attempts[~attempts.decisao.eq('EXECUTADA')]
+                    st.caption(f'{len(hard_blocks)} sinais candidatos sem execução no simulador. Alguns bloqueios são por limite de risco/posição aberta; não são prova de previsibilidade.')
+                    for item in decision_counts.to_dict('records'):
+                        st.write(f"• **{item['Decisão']}**: {item['Quantidade']} sinal(is)")
                     with st.expander('Detalhar cada tentativa'):
                         st.dataframe(attempts,hide_index=True,use_container_width=True)
                 exported=trades.copy()
                 exported['tipo_dado']=provenance['tipo']
                 exported['contrato_declarado']=provenance.get('contrato','NENHUM')
                 exported['sha256_csv_origem']=provenance.get('sha256_csv')
-                st.download_button('Baixar operações v0.8 (CSV)',exported.to_csv(index=False).encode('utf-8-sig'),
-                                   'backtest_trader_pro_ai_elite_v08.csv','text/csv',use_container_width=True)
+                st.download_button('Baixar operações v0.9 (CSV)',exported.to_csv(index=False).encode('utf-8-sig'),
+                                   'backtest_trader_pro_ai_elite_v09.csv','text/csv',use_container_width=True)
                 st.download_button('Baixar auditoria de entradas (CSV)',attempts.to_csv(index=False).encode('utf-8-sig'),
-                                   'auditoria_entradas_v08.csv','text/csv',use_container_width=True)
+                                   'auditoria_entradas_v09.csv','text/csv',use_container_width=True)
                 config={'perfil':profile,'custo_pontos':float(cost),
                         'slippage_ticks_por_lado':int(slip),'max_operacoes_dia':int(daily_limit),
                         'max_hold_candles':int(max_hold),'limite_perda_diaria_pontos':float(daily_loss),
@@ -322,25 +334,25 @@ with tab_bt:
                         'max_perdas_seguidas':int(loss_streak) if loss_streak is not None else None,
                         'min_rr_teorico':float(min_rr)}
                 st.download_button('Baixar relatório de origem e parâmetros (JSON)',
-                    json.dumps({'versao':'0.8','dados':provenance,'parametros':config,
+                    json.dumps({'versao':'0.9','dados':provenance,'parametros':config,
                                 'total_operacoes':len(trades),'saldo_pontos':net,
                                 'calendario':{'mercado':'B3 WIN','ano':2026,'feriados_bloqueados':len(HOLIDAYS_2026),
                                               'anos_sem_calendario':'BLOQUEADOS'}},
                                ensure_ascii=False,indent=2).encode('utf-8'),
-                    'relatorio_origem_v08.json','application/json',use_container_width=True)
+                    'relatorio_origem_v09.json','application/json',use_container_width=True)
                 st.caption('Saldo em pontos, não reais. Custos, liquidez e preço de execução são aproximações. Não operar dinheiro real.')
             except (ValueError,TypeError) as exc:
                 st.error(f'Não foi possível executar: {exc}')
 
 
 with tab_robust:
-    st.subheader('🧬 Laboratório de robustez v0.8')
+    st.subheader('🧬 Laboratório de robustez v0.9')
     st.caption('Esta aba mostra fragilidade da amostra e custo adicional no mesmo backtest. NÃO treina IA, não otimiza parâmetros, não mede probabilidade de acerto futuro e não usa cotações ao vivo.')
     if out is None:
         st.info('Aguardando dados de candles válidos para avaliar a robustez.')
     else:
         st.info('A comparação divide os pregões cronologicamente, sem cortar um pregão ao meio. É uma análise DENTRO da mesma amostra, não um verdadeiro teste fora da amostra.')
-        if st.button('🔬 Calcular diagnóstico de robustez',type='primary',key='v08_robust',use_container_width=True):
+        if st.button('🔬 Calcular diagnóstico de robustez',type='primary',key='v09_robust',use_container_width=True):
             try:
                 diagnostic_trades=backtest(out,cost_points=float(cost),max_hold=int(max_hold),
                     slippage_ticks=int(slip),max_daily_trades=int(daily_limit),
@@ -366,17 +378,52 @@ with tab_robust:
                     periods['Acerto líquido']=periods['Acerto líquido'].map(lambda x: 'N/D' if pd.isna(x) else f'{x:.1%}')
                     st.dataframe(periods,use_container_width=True,hide_index=True)
                     st.download_button('Baixar comparação temporal (CSV)',periods.to_csv(index=False).encode('utf-8-sig'),
-                                       'robustez_periodos_v08.csv','text/csv',use_container_width=True)
+                                       'robustez_periodos_v09.csv','text/csv',use_container_width=True)
                 st.markdown('**Teste de custos extras por operação**')
                 st.caption('Os extras de 0, 5, 10 e 20 pontos são SUBTRAÍDOS do resultado líquido já calculado. Não são os custos totais; não há reexecução da estratégia.')
                 stressed=report['custos'].copy()
                 stressed['Acerto líquido']=stressed['Acerto líquido'].map(lambda x: 'N/D' if pd.isna(x) else f'{x:.1%}')
                 st.dataframe(stressed,use_container_width=True,hide_index=True)
                 st.download_button('Baixar cenários de custo (CSV)',stressed.to_csv(index=False).encode('utf-8-sig'),
-                                   'robustez_custos_v08.csv','text/csv',use_container_width=True)
+                                   'robustez_custos_v09.csv','text/csv',use_container_width=True)
+                # Leitura vertical para celular: tabelas detalhadas continuam disponíveis
+                # acima, mas os resultados-chave não exigem arrastar horizontalmente.
+                st.subheader('📱 Resumo por período')
+                if not report['periodos'].empty:
+                    for item in report['periodos'].to_dict('records'):
+                        with st.container(border=True):
+                            st.markdown(f"**{item['Período']}** · {item['De']} a {item['Até']}")
+                            st.write(f"{item['Pregões']} pregões · {item['Operações']} operações · Saldo {item['Saldo (pts)']:+.1f} pts")
+                st.subheader('📅 Avaliação cronológica v0.9')
+                st.caption('A reserva são os últimos 30% dos pregões. A regra não é otimizada neste painel. Esta separação não se torna um teste cego verdadeiro se os dados ou os resultados já foram examinados.')
+                validation = chronological_validation(
+                    diagnostic_trades, out,
+                    is_demo=(source == 'Demonstração fictícia'),
+                    reserve_fraction=0.30, extra_cost_points=10.0)
+                st.warning('🛑 ' + validation['classificacao'])
+                for item in validation['segmentos'].to_dict('records'):
+                    with st.container(border=True):
+                        st.markdown('**' + item['Segmento'] + '**')
+                        st.caption(f"{item['De']} a {item['Até']} · {item['Pregões']} pregões")
+                        st.write(f"Operações: **{item['Operações']}** · Resultado: **{item['Saldo (pts)']:+.1f} pts**")
+                        win_text = 'N/D' if item['Acerto líquido'] is None else f"{item['Acerto líquido']:.1%}"
+                        st.caption(f"Acerto líquido da amostra: {win_text} · Drawdown: {item['Drawdown (pts)']:.1f} pts")
+                reserve=validation['reserva']
+                reserve_stress=validation['reserva_com_custo_extra']
+                st.metric('Reserva com +10 pts de custos/oper.',f"{reserve_stress['saldo_pts']:+.1f} pts")
+                st.caption('Custo extra subtraído dos resultados já simulados. Não reexecuta a estratégia nem modela liquidez.')
+                with st.expander('⚠️ Critérios e limitações da validação',expanded=True):
+                    for message in validation['alertas']:
+                        st.write('• ' + message)
+                st.download_button('Baixar resultados por pregão (CSV)',
+                    validation['por_dia'].to_csv(index=False).encode('utf-8-sig'),
+                    'validacao_por_pregao_v09.csv','text/csv',use_container_width=True)
+                st.download_button('Baixar separação temporal (CSV)',
+                    validation['segmentos'].to_csv(index=False).encode('utf-8-sig'),
+                    'validacao_segmentos_v09.csv','text/csv',use_container_width=True)
                 for warning in report['alertas']:
                     st.warning(warning)
-                st.caption('Mesmo com boa aparência nos testes, nenhum perfil tem vantagem comprovada. Dados fictícios jamais medem acurácia de mercado.')
+                st.caption('Não há IA treinada, probabilidades preditivas ou autorização para ordens. Proibir uso real com base somente nesses relatórios.')
             except (ValueError,TypeError,KeyError) as exc:
                 st.error(f'Não foi possível avaliar robustez: {exc}')
 
@@ -414,7 +461,7 @@ with tab_data:
     st.markdown('---')
     st.subheader('🧪 Autoteste de calendário — sem dados de mercado')
     st.caption('O teste gera candles ARTIFICIAIS apenas na memória e confere regras de bloqueio: validação do CSV, bloqueio do dia e elegibilidade de entrada. Não declara origem histórica nem mede resultados de trading.')
-    if st.button('🛡️ Executar autoteste de feriados', key='calendar_selftest_08', use_container_width=True):
+    if st.button('🛡️ Executar autoteste de feriados', key='calendar_selftest_09', use_container_width=True):
         from engine import validate_win_candles
         scenarios = [
             ('19/11/2026 · dia útil', '2026-11-19', None, 'ELEGIVEL_HORARIO', None),
@@ -456,6 +503,12 @@ with tab_data:
              signal_entry_gate('COMPRA',pd.Timestamp('2026-06-17 10:00'),pd.Timestamp('2026-06-17 10:05'),contract='WINM26') == 'DIA_VENCIMENTO', 'DIA_VENCIMENTO'),
             ('24/12/2026 feriado B3',
              market_day_gate(pd.Timestamp('2026-12-24 10:00')) == 'FERIADO_B3', 'FERIADO_B3'),
+            ('09/07/2026 pregão normal',
+             signal_entry_gate('COMPRA', pd.Timestamp('2026-07-09 09:05'),
+                               pd.Timestamp('2026-07-09 09:10'),contract='WINQ26') == 'ELEGIVEL_HORARIO',
+             'ELEGIVEL_HORARIO'),
+            ('31/12/2026 sem pregão',
+             market_day_gate(pd.Timestamp('2026-12-31 10:00')) == 'FERIADO_B3', 'FERIADO_B3'),
         ]
         report.extend({'Data':label,'Candles':'NÃO APLICÁVEL','Sinal':gate,
                        'Teste':'PASSOU' if passed else 'FALHOU'} for label,passed,gate in extra_checks)
@@ -466,7 +519,7 @@ with tab_data:
             st.error(f'⚠️ {count}/{len(report)} verificações aprovadas. Confira as regras antes de confiar no bloqueio.')
         st.dataframe(pd.DataFrame(report), use_container_width=True, hide_index=True)
         st.caption('Importante: este autoteste verifica regras previstas no código. Não autentica calendário para outros anos, feriados extraordinários ou negociações reais.')
-    st.caption('A v0.8 não baixa dados de terceiros, não verifica licenças, não acessa cotações ao vivo e não envia ordens. Resultado retrospectivo não prevê acertos futuros.')
+    st.caption('A v0.9 não baixa dados de terceiros, não verifica licenças, não acessa cotações ao vivo e não envia ordens. Resultado retrospectivo não prevê acertos futuros.')
 
 st.divider()
-st.caption('Trader Pro AI Elite · v0.8 · Simulador de pesquisa. Horários de referência B3 em nov/2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')
+st.caption('Trader Pro AI Elite · v0.9 · Simulador de pesquisa. Horários de referência B3 em nov/2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')
