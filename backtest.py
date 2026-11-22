@@ -11,19 +11,31 @@ ENTRY_CUTOFF = time(17,55)  # margem antes do fechamento do pregão
 FLAT_CANDLE = time(18,10)   # saída no fechamento às 18:15, antes do call
 COLUMNS = ('sinal_candle','entrada_candle','saida_candle','direcao','entrada','stop','alvo','saida',
            'motivo','gross_points','cost_points','slippage_points','net_points',
-           'entrada_data','saida_data','tipo_horario_saida')
+           'entrada_data','saida_data','tipo_horario_saida','risco_stop_estimado_pts','rr_teorico')
 
 
 def backtest(data, cost_points=2.0, max_hold=12, slippage_ticks=1, max_daily_trades=3,
-             max_daily_loss_points=200.0, contract=None):
+             max_daily_loss_points=200.0, contract=None,
+             max_trade_risk_points=None, max_consecutive_losses=None,
+             min_reward_risk=0.0, return_audit=False):
     """O custo informado equivale a pontos por operação completa, ADICIONAL ao slippage.
 
     1 tick = 5 pontos. Slippage simétrico adverso em entrada e saída.
     Entradas apenas no candle seguinte, desde que na mesma sessão.
     """
-    for key,value in [('custo',cost_points),('limite de perda',max_daily_loss_points)]:
+    for key,value in [('custo',cost_points),('limite de perda',max_daily_loss_points),
+                      ('RR mínimo', min_reward_risk)]:
         if isinstance(value,bool) or not isinstance(value,(int,float)) or not math.isfinite(value) or value < 0:
             raise ValueError(f'Parâmetro inválido: {key}.')
+    if max_trade_risk_points is not None and (isinstance(max_trade_risk_points, bool)
+            or not isinstance(max_trade_risk_points,(int,float))
+            or not math.isfinite(max_trade_risk_points) or max_trade_risk_points<=0):
+        raise ValueError('Limite de risco por operação deve ser positivo.')
+    if max_consecutive_losses is not None and (not isinstance(max_consecutive_losses,int)
+            or isinstance(max_consecutive_losses,bool) or max_consecutive_losses < 1):
+        raise ValueError('Limite de perdas consecutivas deve ser inteiro positivo.')
+    if not isinstance(return_audit, bool):
+        raise ValueError('return_audit inválido.')
     if not (isinstance(slippage_ticks,int) and not isinstance(slippage_ticks,bool) and slippage_ticks >= 0):
         raise ValueError('Slippage em ticks deve ser um inteiro não negativo.')
     if not (isinstance(max_hold,int) and not isinstance(max_hold,bool) and max_hold >= 1
@@ -39,27 +51,34 @@ def backtest(data, cost_points=2.0, max_hold=12, slippage_ticks=1, max_daily_tra
     expiry = contract_expiry(contract) if contract else None
     records=[]
     daily = {}
+    decisions = {}
     i = 34
     while i < len(df)-1:
         direction = df.at[i,'signal']
         atr = float(df.at[i,'atr'])
-        if direction not in ('COMPRA','VENDA') or not np.isfinite(atr) or atr<=0:
+        if direction not in ('COMPRA','VENDA'):
             i+=1;continue
+        if not np.isfinite(atr) or atr<=0:
+            decisions[i]='ATR_INVALIDO'; i+=1;continue
         entry_i=i+1
         signal_dt=df.at[i,'datetime']
         entry_dt=df.at[entry_i,'datetime']
         if entry_dt.date()!=signal_dt.date() or entry_dt-signal_dt!=pd.Timedelta(minutes=5):
-            i+=1;continue
+            decisions[i]='SEM_CANDLE_SEGUINTE_MESMO_DIA'; i+=1;continue
         if entry_dt.time()>ENTRY_CUTOFF:
-            i+=1;continue
+            decisions[i]='HORARIO_TARDIO'; i+=1;continue
         day=entry_dt.date()
         # No vencimento há regras especiais de settlement/horário.
         # Excluímos todo o dia até modelarmos o vencimento explicitamente.
         if expiry and day == expiry:
-            i+=1;continue
-        d=daily.setdefault(day,{'trades':0,'net':0.0})
-        if d['trades']>=max_daily_trades or d['net']<=-max_daily_loss_points:
-            i+=1;continue
+            decisions[i]='DIA_VENCIMENTO'; i+=1;continue
+        d=daily.setdefault(day,{'trades':0,'net':0.0,'loss_streak':0})
+        if d['trades']>=max_daily_trades:
+            decisions[i]='MAX_OPERACOES_DIA'; i+=1;continue
+        if d['net']<=-max_daily_loss_points:
+            decisions[i]='LIMITE_PERDA_REALIZADA_DIA'; i+=1;continue
+        if max_consecutive_losses is not None and d['loss_streak']>=max_consecutive_losses:
+            decisions[i]='PAUSA_PERDAS_CONSECUTIVAS'; i+=1;continue
         side=1 if direction=='COMPRA' else -1
         open_mid=float(df.at[entry_i,'open'])
         entry=open_mid + side*slippage_ticks*TICK
@@ -68,7 +87,16 @@ def backtest(data, cost_points=2.0, max_hold=12, slippage_ticks=1, max_daily_tra
         target=(math.ceil((entry+2.0*atr)/TICK)*TICK if side==1
                 else math.floor((entry-2.0*atr)/TICK)*TICK)
         if min(entry,stop,target)<=0 or (side==1 and not stop<entry<target) or (side==-1 and not target<entry<stop):
-            i+=1;continue
+            decisions[i]='STOP_ALVO_INVALIDOS'; i+=1;continue
+        # Stop teórico inclui slippage adverso adicional na saída e taxas;
+        # gaps e liquidez ruim podem produzir perdas MAIORES que esta projeção.
+        risk_points=round(side*(entry-stop)+slippage_ticks*TICK+cost_points,2)
+        potential_gain=round(side*(target-entry)-slippage_ticks*TICK-cost_points,2)
+        rr=(potential_gain/risk_points) if risk_points>0 else 0.0
+        if max_trade_risk_points is not None and risk_points>max_trade_risk_points:
+            decisions[i]='RISCO_OPERACAO_EXCEDIDO'; i+=1;continue
+        if rr<min_reward_risk:
+            decisions[i]='RR_INSUFICIENTE'; i+=1;continue
         # A entrada só existe no próximo candle; nunca atravessa outro pregão.
         end_i=entry_i
         while end_i+1 < len(df) and end_i-entry_i+1 < max_hold:
@@ -109,8 +137,24 @@ def backtest(data, cost_points=2.0, max_hold=12, slippage_ticks=1, max_daily_tra
              'direcao':direction,'entrada':entry,'stop':stop,'alvo':target,'saida':exit_fill,
              'motivo':reason,'gross_points':gross,'cost_points':cost_points,
              'slippage_points':slip,'net_points':net,
-             'entrada_data':str(entry_dt),'saida_data':str(exit_dt),'tipo_horario_saida':time_type}
+             'entrada_data':str(entry_dt),'saida_data':str(exit_dt),'tipo_horario_saida':time_type,
+             'risco_stop_estimado_pts':risk_points,'rr_teorico':round(rr,3)}
         records.append(rec)
         d['trades']+=1;d['net']+=net
+        d['loss_streak']=(d['loss_streak']+1) if net<0 else 0
+        decisions[i]='EXECUTADA'
+        # Sinais surgidos enquanto há posição são documentados, não executados.
+        for held in range(i+1,j+1):
+            if df.at[held,'signal'] in ('COMPRA','VENDA'):
+                decisions[held]='POSICAO_ABERTA'
         i=j+1
-    return pd.DataFrame(records,columns=COLUMNS)
+    trades=pd.DataFrame(records,columns=COLUMNS)
+    if not return_audit:
+        return trades
+    audit_rows=[]
+    for idx in df.index[df.signal.isin(('COMPRA','VENDA'))]:
+        audit_rows.append({'sinal_candle':int(idx),
+                           'sinal_data':str(df.at[idx,'datetime']),
+                           'direcao':str(df.at[idx,'signal']),
+                           'decisao':decisions.get(int(idx),'SEM_PROXIMO_CANDLE')})
+    return trades,pd.DataFrame(audit_rows,columns=('sinal_candle','sinal_data','direcao','decisao'))

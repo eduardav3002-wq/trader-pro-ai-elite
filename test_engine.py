@@ -98,3 +98,35 @@ def test_symbol_declared_in_csv():
         assert 'não corresponde' in str(exc)
     else:
         raise AssertionError('Contratos misturados devem ser rejeitados.')
+
+
+def test_v06_selectivity_diagnostics():
+    from engine import REASON_LABELS
+    base = analyze(demo_data(), profile='base')
+    selective = analyze(demo_data(), profile='seletivo')
+    assert len(selective) == len(base)
+    assert selective.reason_code.isin(REASON_LABELS).all()
+    assert (selective.signal.iloc[:75] == 'AGUARDAR').all()
+    assert selective.atr_ratio.iloc[:73].isna().all()
+    assert set(selective.loc[selective.signal.ne('AGUARDAR'),'reason_code']).issubset(
+        {'FILTROS_COMPRA', 'FILTROS_VENDA'})
+    # Filtros adicionais NÃO devem criar novas entradas frente à regra original.
+    candidate = selective.signal.ne('AGUARDAR')
+    assert (selective.loc[candidate,'signal'] == base.loc[candidate,'signal']).all()
+    try:
+        analyze(demo_data(), profile='fantasia')
+    except ValueError as exc:
+        assert 'Perfil inválido' in str(exc)
+    else:
+        raise AssertionError('Perfil de pesquisa inválido deveria falhar.')
+
+
+def test_v06_no_future_in_all_columns():
+    data = demo_data()
+    a = analyze(data, profile='seletivo')
+    later = data.copy()
+    later.loc[260:, ['open','high','low','close']] += 1000
+    b = analyze(later, profile='seletivo')
+    # Dados futuros não podem mudar a decisão nem diagnóstico de um candle já fechado.
+    for col in ['signal','reason_code','atr_ratio','candle_atr']:
+        pd.testing.assert_series_equal(a[col].iloc[:260],b[col].iloc[:260],check_names=False)

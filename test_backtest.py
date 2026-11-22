@@ -57,3 +57,34 @@ def test_reject_partial_sessions():
         assert 'Pregão incompleto' in str(exc)
     else:
         raise AssertionError('Backtest de pregão incompleto deve ser bloqueado.')
+
+
+def test_v06_risk_controls_and_audit():
+    source=analyze(demo_data(), profile='seletivo')
+    trades, audit=backtest(source, max_trade_risk_points=125.0,
+                            max_consecutive_losses=2,min_reward_risk=1.0,
+                            return_audit=True)
+    assert not audit.empty
+    assert len(audit)==int(source.signal.isin(['COMPRA','VENDA']).sum())
+    assert (audit.decisao=='EXECUTADA').sum()==len(trades)
+    assert trades.risco_stop_estimado_pts.le(125.0).all()
+    assert trades.rr_teorico.ge(1.0).all()
+    # Regra de pausa verifica sequência de perdas realizadas (por dia).
+    for _, day in trades.groupby(pd.to_datetime(trades.entrada_data).dt.date):
+        streak=0
+        for x in day.net_points:
+            assert streak < 2
+            streak=streak+1 if x<0 else 0
+    blocked, blocked_audit=backtest(source,max_trade_risk_points=5.0,
+                                    return_audit=True)
+    assert blocked.empty
+    assert (blocked_audit.decisao=='RISCO_OPERACAO_EXCEDIDO').any()
+    for params in ({'max_trade_risk_points':-1},
+                   {'max_consecutive_losses':0},
+                   {'min_reward_risk':float('nan')}):
+        try:
+            backtest(source,**params)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError('Parâmetro de risco inválido passou.')

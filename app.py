@@ -1,4 +1,4 @@
-"""Trader Pro AI Elite v0.5 — pesquisa sem corretora nem ordens."""
+"""Trader Pro AI Elite v0.6 — pesquisa sem corretora nem ordens."""
 import hashlib
 import io
 import json
@@ -11,7 +11,7 @@ from audit import audit_trades
 from backtest import backtest
 from engine import analyze, demo_data
 
-st.set_page_config(page_title='Trader Pro AI Elite · v0.5',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
+st.set_page_config(page_title='Trader Pro AI Elite · v0.6',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
 st.markdown('''<style>
 .stApp{background:#080e1a;color:#e9f0fb}.block-container{max-width:1250px;padding:1rem 1rem 3rem}
 header[data-testid="stHeader"]{background:transparent}
@@ -31,7 +31,7 @@ section[data-testid="stSidebar"]{background:#101a2b}
 @media(max-width:640px){.block-container{padding:.8rem .7rem 2rem}.hero{padding:16px}.signal{padding:14px}}
 </style>''',unsafe_allow_html=True)
 
-st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V0.5</div>
+st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V0.6</div>
 <div class="hero-title">◈ TRADER PRO AI ELITE</div>
 <div class="hero-sub">WIN · Intraday · Filtros EMA 9/21, RSI 14, ATR 14 e tendência 15m</div>
 <span class="pill">● MODO PESQUISA — SEM ORDENS REAIS</span></div>''',unsafe_allow_html=True)
@@ -41,6 +41,10 @@ with st.sidebar:
     source=st.radio('Fonte dos dados',['Demonstração fictícia','CSV histórico · origem declarada'],index=0)
     chart_bars=st.slider('Candles no gráfico',30,180,75,15)
     show_ema=st.toggle('Exibir médias móveis',True)
+    profile_ui=st.radio('Perfil de pesquisa',
+                        ['Seletivo v0.6 (experimental)','Base v0.5 (comparação)'],index=0)
+    profile='seletivo' if profile_ui.startswith('Seletivo') else 'base'
+    st.caption('Seletivo aplica filtros de volatilidade/candles. Valores escolhidos para demonstrar regras, NÃO ajustados ao WIN real.')
     st.divider()
     st.caption('Para usar histórico: candles de 5 min de um contrato WIN específico, dias completos de 2026 e horário de Brasília. Origem declarada NÃO significa autenticidade verificada.')
 
@@ -72,7 +76,7 @@ if source.startswith('CSV histórico'):
                 raise ValueError('CSV maior que 15 MB. Envie uma amostra de 2026 menor.')
             contract=contract_input.strip().upper()
             raw=pd.read_csv(io.BytesIO(payload))
-            out=analyze(raw,contract=contract)
+            out=analyze(raw,contract=contract,profile=profile)
             provenance={'tipo':'HISTORICO_DECLARADO_NAO_VERIFICADO','fonte_declarada':provider.strip(),
                         'contrato':contract,'nome_arquivo':uploaded.name,
                         'sha256_csv':hashlib.sha256(payload).hexdigest(),
@@ -85,14 +89,14 @@ if source.startswith('CSV histórico'):
             st.error(f'CSV rejeitado: {exc}')
 else:
     try:
-        out=analyze(demo_data())
+        out=analyze(demo_data(),profile=profile)
         provenance={'tipo':'DEMONSTRACAO_FICTICIA','fonte_declarada':'Gerador sintético local',
                     'contrato':'NENHUM','sha256_csv':None,'total_candles':len(out)}
     except (ValueError,TypeError) as exc:
         st.error(f'Erro na demonstração: {exc}')
     st.warning('DEMONSTRAÇÃO 100% FICTÍCIA: candles e operações são INVENTADOS. Não avaliam eficácia no mercado.')
 
-tab_terminal,tab_bt,tab_audit,tab_data=st.tabs(['📈 Terminal de sinais','🧪 Backtesting','🛡️ Auditoria v0.3','🔐 Dados e origem'])
+tab_terminal,tab_decision,tab_bt,tab_audit,tab_data=st.tabs(['📈 Sinais','🛑 Não operar','🧪 Backtest','🛡️ Auditoria','🔐 Dados'])
 
 with tab_terminal:
     if out is None:
@@ -100,18 +104,20 @@ with tab_terminal:
     else:
         last=out.iloc[-1]
         signal=str(last['signal'])
+        from datetime import time
+        from backtest import ENTRY_CUTOFF
+        # Um sinal sem abertura seguinte elegível não é executável, mesmo no histórico.
+        next_open=(last['datetime']+pd.Timedelta(minutes=5))
+        entry_possible=(next_open.date()==last['datetime'].date() and
+                        next_open.time()<=ENTRY_CUTOFF)
+        display_signal=signal if entry_possible else 'AGUARDAR'
         palette={'COMPRA':'#4bd4a3','VENDA':'#ff7f91','AGUARDAR':'#f1c56e'}
-        reason=[]
-        if last['trend15']=='SEM CONFIRMAÇÃO':
-            reason.append('Ainda não existem candles completos suficientes para confirmar a tendência de 15 minutos.')
-        elif last['condition']=='POSSÍVEL LATERALIZAÇÃO':
-            reason.append('As médias móveis estão próximas: possível lateralização.')
-        elif signal=='AGUARDAR':
-            reason.append('Um ou mais filtros de tendência, RSI ou rompimento falharam. NÃO OPERAR.')
-        else:
-            reason.append('Tendência 5m/15m, RSI e rompimento de três candles estão alinhados no modelo experimental.')
-        st.markdown(f'''<div class="signal" style="border-left:5px solid {palette[signal]}"><div class="muted">STATUS DO ÚLTIMO CANDLE · HISTÓRICO</div>
-        <strong style="color:{palette[signal]}">{signal}</strong><div class="muted">{reason[0]}</div></div>''',unsafe_allow_html=True)
+        reason_text=str(last['reason_detail'])
+        if not entry_possible:
+            reason_text='Sem abertura elegível no próximo candle, dentro da janela de entrada do backtest.'
+        st.markdown(f'''<div class="signal" style="border-left:5px solid {palette[display_signal]}"><div class="muted">ÚLTIMO CANDLE CARREGADO · {profile_ui}</div>
+        <strong style="color:{palette[display_signal]}">{display_signal}</strong><div class="muted">{reason_text}</div></div>''',unsafe_allow_html=True)
+        st.caption('Sinal retrospectivo. Não é cotação ao vivo nem recomendação para operar. NOVAS ordens seguem desligadas.')
         left,right=st.columns(2)
         left.metric('Fechamento (pontos)',f'{last["close"]:,.0f}'.replace(',','.'))
         right.metric('RSI 14',f'{last["rsi"]:.1f}'.replace('.',','))
@@ -131,14 +137,17 @@ with tab_terminal:
             legend=dict(orientation='h',y=1.12,x=0),xaxis=dict(showgrid=False),yaxis=dict(gridcolor='#23334a',side='right'))
         st.plotly_chart(fig,use_container_width=True,config={'displaylogo':False,'scrollZoom':False})
         with st.expander('🔎 Por que essa decisão?',expanded=True):
-            for item in reason: st.write('• '+item)
+            st.write('• '+reason_text)
             st.write('• Tendência EMA 9/21: **'+str(last['trend'])+'**')
             st.write('• Tendência dos candles completos 15m: **'+str(last['trend15'])+'**')
             st.write('• Condição de mercado: **'+str(last['condition'])+'**')
-            st.write('• Motivo técnico: **'+str(last['reason_code'])+'**')
+            st.write('• Código do motivo: **'+str(last['reason_code'])+'**')
+            if profile=='seletivo':
+                st.write(f"• ATR relativo à mediana anterior: **{last['atr_ratio']:.2f}** (faixa exploratória 0,65 a 1,80).")
+                st.write(f"• Amplitude do candle / ATR: **{last['candle_atr']:.2f}** (máximo 2,20).")
             st.caption('Esse motor não calcula probabilidade estatística de acerto.')
         with st.expander('🎯 Níveis ilustrativos de ATR'):
-            if signal=='AGUARDAR':
+            if display_signal=='AGUARDAR':
                 st.info('Nenhuma entrada: o sistema recomenda aguardar.')
             else:
                 a,b,c=st.columns(3)
@@ -147,65 +156,120 @@ with tab_terminal:
                 c.metric('Alvo estimado',f'{last["target"]:,.0f}')
                 st.caption('Referências ilustrativas arredondadas à grade de 5 pontos; entrada de backtest é na próxima abertura.')
         with st.expander('🗂️ Últimos candles'):
-            st.dataframe(out[['datetime','close','ema9','ema21','rsi','atr','trend','trend15','condition','signal']].tail(20),
+            st.dataframe(out[['datetime','close','ema9','ema21','rsi','atr','trend','trend15','signal','reason_detail']].tail(20),
                          use_container_width=True,hide_index=True)
 
-with tab_bt:
-    st.write('Backtest histórico com validação rigorosa. **Nunca confunda resultado retrospectivo com probabilidade futura.**')
-    st.caption('Entrada na abertura seguinte até 17:55; exige pregões completos; stop tem prioridade no mesmo candle, limite de 3 operações/dia e zeragem até 18:15; ignora o vencimento do contrato informado.')
+with tab_decision:
+    st.subheader('🛑 Central de decisão: quando NÃO operar')
+    st.caption('Cada candle recebe uma explicação verificável. Os filtros seletivos são hipóteses de pesquisa, não uma taxa de acerto prevista.')
     if out is None:
-        st.info('Envie candles válidos ou escolha demonstração fictícia para liberar o backtest.')
+        st.info('Envie candles válidos ou escolha a demonstração fictícia para ver os motivos.')
+    else:
+        waiting=out[out.signal.eq('AGUARDAR')]
+        total=int(len(out))
+        st.metric('Candles marcados AGUARDAR',f'{len(waiting)} / {total}')
+        st.caption(f'Percentual de espera: {100*len(waiting)/total:.1f}% dos candles. Isso não indica qualidade dos sinais.')
+        reasons=(waiting.groupby(['reason_code','reason_detail'],as_index=False).size()
+                 .sort_values('size',ascending=False)
+                 .rename(columns={'reason_detail':'Motivo','size':'Candles'}))
+        st.dataframe(reasons[['Motivo','Candles']],hide_index=True,use_container_width=True)
+        st.subheader('Registro dos últimos 30 candles')
+        st.dataframe(out[['datetime','signal','reason_detail','atr_ratio','candle_atr']].tail(30),
+                     hide_index=True,use_container_width=True)
+        diag_export=out[['datetime','open','high','low','close','signal','reason_code',
+                         'reason_detail','atr','atr_ratio','candle_atr','trend','trend15']]
+        st.download_button('Baixar decisões por candle (CSV)',
+                           diag_export.to_csv(index=False).encode('utf-8-sig'),
+                           'decisoes_trader_pro_ai_elite_v06.csv','text/csv',
+                           use_container_width=True)
+
+with tab_bt:
+    st.write('🧪 Pesquisa retrospectiva. Não confunda resultados com acertos futuros.')
+    st.caption('Abertura seguinte, stop prioritário no candle com toque simultâneo, nenhuma ordem enviada. Dias completos obrigatórios.')
+    if out is None:
+        st.info('Aguardando dados validados para liberar o backtest.')
     else:
         b1,b2=st.columns(2)
         with b1:
-            cost=st.number_input('Taxas estimadas por operação (pontos, ida + volta)',min_value=0.0,value=2.0,step=0.5)
-            slip=st.number_input('Slippage por lado (ticks de 5 pontos)',min_value=0,max_value=20,value=1,step=1)
+            cost=st.number_input('Taxas por operação (pontos, ida + volta)',min_value=0.0,value=2.0,step=0.5)
+            slip=st.number_input('Slippage por lado (ticks de 5 pts)',min_value=0,max_value=20,value=1,step=1)
             daily_limit=st.number_input('Máximo de operações por dia',min_value=1,max_value=30,value=3,step=1)
         with b2:
             max_hold=st.number_input('Duração máxima (candles de 5 min)',min_value=1,max_value=100,value=12,step=1)
-            daily_loss=st.number_input('Limite de perda líquida diária (pontos)',min_value=0.0,value=200.0,step=25.0)
-        st.caption(f'Exemplo de fricção: {cost:.1f} pts de taxas + {2*slip*5} pts de slippage por operação; isto é uma hipótese, não preço de corretora.')
-        run=st.button('Executar backtest v0.5',type='primary',use_container_width=True)
+            daily_loss=st.number_input('Limite de perda diária realizada (pontos)',min_value=0.0,value=200.0,step=25.0)
+            st.caption(f'Hipótese: {cost:.1f} pts de taxas + {2*slip*5} pts de slippage por operação.')
+        enable_risk=st.checkbox('Ativar travas extras v0.6 (experimentais)',value=profile=='seletivo')
+        if enable_risk:
+            r1,r2,r3=st.columns(3)
+            max_risk=r1.number_input('Risco máximo do stop (pts)',min_value=5.0,value=125.0,step=5.0)
+            loss_streak=r2.number_input('Pausar após N perdas seguidas no dia',min_value=1,max_value=10,value=2,step=1)
+            min_rr=r3.number_input('Risco-retorno mínimo teórico',min_value=0.0,max_value=5.0,value=1.0,step=0.1)
+            st.caption('O limite de risco é uma estimativa: gaps e slippage podem gerar perdas maiores. A pausa usa apenas operações encerradas.')
+        else:
+            max_risk=None
+            loss_streak=None
+            min_rr=0.0
+        run=st.button('Executar backtest v0.6',type='primary',use_container_width=True)
         if run:
             try:
-                trades=backtest(out,cost_points=cost,max_hold=int(max_hold),slippage_ticks=int(slip),
-                                max_daily_trades=int(daily_limit),max_daily_loss_points=daily_loss,contract=contract)
+                trades,attempts=backtest(out,cost_points=float(cost),max_hold=int(max_hold),
+                    slippage_ticks=int(slip),max_daily_trades=int(daily_limit),
+                    max_daily_loss_points=float(daily_loss),contract=contract,
+                    max_trade_risk_points=float(max_risk) if max_risk is not None else None,
+                    max_consecutive_losses=int(loss_streak) if loss_streak is not None else None,
+                    min_reward_risk=float(min_rr),return_audit=True)
                 if source=='Demonstração fictícia':
-                    st.warning('Resultado abaixo é exclusivamente de preços INVENTADOS. Não mede eficácia no mercado WIN.')
+                    st.warning('DEMONSTRAÇÃO FICTÍCIA: preços INVENTADOS. Não mede eficácia nem valida os filtros.')
+                net=float(trades.net_points.sum()) if not trades.empty else 0.0
+                wins=int(trades.net_points.gt(0).sum()) if not trades.empty else 0
+                c1,c2,c3=st.columns(3)
+                c1.metric('Operações',len(trades))
+                c2.metric('Acerto líquido',f'{wins/len(trades):.1%}' if len(trades) else 'N/D')
+                c3.metric('Saldo líquido',f'{net:+.1f} pts')
                 if trades.empty:
-                    st.info('Nenhuma operação aprovada pelos filtros nesta amostra. Isso é um resultado possível e não deve ser forçado.')
+                    st.info('Nenhuma operação passou por todos os filtros. Não forçamos operações.')
                 else:
-                    net=float(trades.net_points.sum())
-                    wins=int(trades.net_points.gt(0).sum())
                     equity=pd.concat([pd.Series([0.0]),trades.net_points.cumsum().reset_index(drop=True)],ignore_index=True)
                     dd=float((equity-equity.cummax()).min())
-                    c1,c2,c3,c4=st.columns(4)
-                    c1.metric('Operações',int(len(trades)))
-                    c2.metric('Acerto líquido',f'{wins/len(trades):.1%}')
-                    c3.metric('Saldo líquido',f'{net:+.1f} pts')
-                    c4.metric('Drawdown (do zero)',f'{dd:.1f} pts')
-                    st.line_chart(equity,y_label='Pontos acumulados · inicia em zero')
+                    st.metric('Rebaixamento máximo (drawdown)',f'{dd:.1f} pts')
+                    st.line_chart(equity,y_label='Pontos acumulados desde zero')
                     gain=float(trades.loc[trades.net_points.gt(0),'net_points'].sum())
                     loss=-float(trades.loc[trades.net_points.lt(0),'net_points'].sum())
-                    pf=(gain/loss if loss>0 else float('nan'))
-                    st.caption(f'Profit factor: {pf:.2f}' if loss else 'Profit factor: indefinido (sem perdas na amostra)')
-                    if len(trades)<100: st.warning('Amostra com menos de 100 operações: métricas muito instáveis. Não há evidência de vantagem estatística.')
-                    st.dataframe(trades,use_container_width=True,hide_index=True)
-                    exported=trades.copy()
-                    exported['tipo_dado']=provenance['tipo']
-                    exported['contrato_declarado']=provenance.get('contrato','NENHUM')
-                    exported['sha256_csv_origem']=provenance.get('sha256_csv')
-                    st.download_button('Baixar operações v0.5 (CSV)',exported.to_csv(index=False).encode('utf-8-sig'),
-                                       'backtest_trader_pro_ai_elite_v05.csv','text/csv',use_container_width=True)
-                    config={'custo_pontos':cost,'slippage_ticks_por_lado':int(slip),
-                            'max_operacoes_dia':int(daily_limit),'max_hold_candles':int(max_hold),
-                            'limite_perda_diaria_pontos':daily_loss}
-                    st.download_button('Baixar relatório de origem e parâmetros (JSON)',
-                                       json.dumps({'versao':'0.5','dados':provenance,'parametros':config,
-                                                   'total_operacoes':len(trades),'saldo_pontos':net},
-                                                  ensure_ascii=False,indent=2).encode('utf-8'),
-                                       'relatorio_origem_v05.json','application/json',use_container_width=True)
-                    st.caption('Pontos, não reais. Valor teórico de cada ponto WIN: R$0,20 por contrato; tributação, corretora e liquidez reais não foram verificadas.')
+                    st.caption(f'Profit factor: {gain/loss:.2f}' if loss else 'Profit factor indefinido: sem perdas registradas')
+                    if len(trades)<100:
+                        st.warning('Menos de 100 operações: amostra pequena e instável. Não há evidência de vantagem estatística.')
+                    with st.expander('Ver tabela completa das operações'):
+                        st.dataframe(trades,use_container_width=True,hide_index=True)
+                st.subheader('Auditoria das entradas')
+                st.caption('Esta tabela mostra por que cada sinal do motor foi executado ou bloqueado no backtest.')
+                if attempts.empty:
+                    st.info('Nenhum sinal de entrada foi gerado nesta amostra.')
+                else:
+                    decision_counts=(attempts.groupby('decisao',as_index=False).size()
+                                     .rename(columns={'decisao':'Decisão','size':'Quantidade'}))
+                    st.dataframe(decision_counts,hide_index=True,use_container_width=True)
+                    with st.expander('Detalhar cada tentativa'):
+                        st.dataframe(attempts,hide_index=True,use_container_width=True)
+                exported=trades.copy()
+                exported['tipo_dado']=provenance['tipo']
+                exported['contrato_declarado']=provenance.get('contrato','NENHUM')
+                exported['sha256_csv_origem']=provenance.get('sha256_csv')
+                st.download_button('Baixar operações v0.6 (CSV)',exported.to_csv(index=False).encode('utf-8-sig'),
+                                   'backtest_trader_pro_ai_elite_v06.csv','text/csv',use_container_width=True)
+                st.download_button('Baixar auditoria de entradas (CSV)',attempts.to_csv(index=False).encode('utf-8-sig'),
+                                   'auditoria_entradas_v06.csv','text/csv',use_container_width=True)
+                config={'perfil':profile,'custo_pontos':float(cost),
+                        'slippage_ticks_por_lado':int(slip),'max_operacoes_dia':int(daily_limit),
+                        'max_hold_candles':int(max_hold),'limite_perda_diaria_pontos':float(daily_loss),
+                        'risco_max_stop_pontos':float(max_risk) if max_risk is not None else None,
+                        'max_perdas_seguidas':int(loss_streak) if loss_streak is not None else None,
+                        'min_rr_teorico':float(min_rr)}
+                st.download_button('Baixar relatório de origem e parâmetros (JSON)',
+                    json.dumps({'versao':'0.6','dados':provenance,'parametros':config,
+                                'total_operacoes':len(trades),'saldo_pontos':net},
+                               ensure_ascii=False,indent=2).encode('utf-8'),
+                    'relatorio_origem_v06.json','application/json',use_container_width=True)
+                st.caption('Saldo em pontos, não reais. Custos, liquidez e preço de execução são aproximações. Não operar dinheiro real.')
             except (ValueError,TypeError) as exc:
                 st.error(f'Não foi possível executar: {exc}')
 
@@ -235,7 +299,7 @@ with tab_data:
         st.json(provenance)
         st.info('SHA-256 identifica os bytes do arquivo carregado. Não comprova se as cotações são reais, corretas ou completas no fornecedor.')
     st.markdown('''**Para um backtest histórico comparável:** exporte candles OHLC de 5 minutos de um único vencimento do WIN em 2026, com data/hora de abertura no fuso de Brasília, pregões completos e sem gaps. Declare a origem e o ticker da série (ex.: WINZ26). Um CSV de operações não substitui candles.''')
-    st.caption('A v0.5 não baixa dados de terceiros, não verifica licenças, não acessa cotações ao vivo e não envia ordens. Resultado retrospectivo não prevê acertos futuros.')
+    st.caption('A v0.6 não baixa dados de terceiros, não verifica licenças, não acessa cotações ao vivo e não envia ordens. Resultado retrospectivo não prevê acertos futuros.')
 
 st.divider()
-st.caption('Trader Pro AI Elite · v0.5 · Simulador de pesquisa. Horários de referência B3 em nov/2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')
+st.caption('Trader Pro AI Elite · v0.6 · Simulador de pesquisa. Horários de referência B3 em nov/2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')

@@ -1,4 +1,4 @@
-"""Trader Pro AI Elite v0.5: pesquisa de OHLC de WIN, sem ordens reais.
+"""Trader Pro AI Elite v0.6: pesquisa de OHLC de WIN, sem ordens reais.
 
 A validação da grade de preço e dos horários é deliberadamente estrita.
 Horários-base são os da B3 para 2026-11; feriados de 2026 são conferidos,
@@ -188,7 +188,31 @@ def demo_data(days=4, seed=27):
     return pd.DataFrame(rows)
 
 
-def analyze(data, contract=None):
+REASON_LABELS = {
+    'AQUECIMENTO': 'Histórico insuficiente para calcular os filtros com segurança',
+    'SEM_CONFIRMACAO_15M': 'Tendência de 15 minutos ainda não confirmada',
+    'ATR_INVALIDO': 'Volatilidade indisponível ou nula',
+    'VOLATILIDADE_BAIXA': 'Volatilidade abaixo da faixa exploratória',
+    'VOLATILIDADE_ALTA': 'Volatilidade acima da faixa exploratória',
+    'CANDLE_EXTREMO': 'Candle grande demais em relação ao ATR',
+    'LATERALIZACAO': 'Possível lateralização: médias próximas',
+    'SEM_DIRECAO': 'Sem direção definida nas médias de 5 minutos',
+    'TENDENCIAS_DIVERGENTES': 'Tendências de 5 e 15 minutos não concordam',
+    'RSI_FORA': 'RSI fora da faixa escolhida para a direção',
+    'SEM_ROMPIMENTO': 'Sem rompimento confirmado dos três candles anteriores',
+    'FILTROS_COMPRA': 'Filtros exploratórios alinhados para compra',
+    'FILTROS_VENDA': 'Filtros exploratórios alinhados para venda',
+}
+
+
+def analyze(data, contract=None, profile='seletivo'):
+    """Gera sinais determinísticos, sempre com informações conhecidas no candle.
+
+    'base' reproduz a regra v0.5; 'seletivo' acrescenta filtros exploratórios
+    não otimizados em dados reais. Nenhum perfil implica acurácia conhecida.
+    """
+    if profile not in ('base', 'seletivo'):
+        raise ValueError('Perfil inválido. Escolha base ou seletivo.')
     df = validate_win_candles(data, contract=contract)
     df['ema9'] = df.close.ewm(span=9, adjust=False).mean()
     df['ema21'] = df.close.ewm(span=21, adjust=False).mean()
@@ -219,22 +243,49 @@ def analyze(data, contract=None):
                        left_on='candle_close',right_on='bar15_close',direction='backward')
     df['trend15'] = df['trend15'].fillna('SEM CONFIRMAÇÃO')
 
-    # Rompimento observado no fechamento de cada candle, sem olhar seu sucessor.
-    prior_high = df.high.shift(1).rolling(3,min_periods=3).max()
-    prior_low = df.low.shift(1).rolling(3,min_periods=3).min()
-    directional = df.condition.eq('MOVIMENTO') & df.atr.gt(0)
-    buy = directional & df.trend.eq('ALTA') & df.trend15.eq('ALTA') & df.rsi.between(52,67) & df.close.gt(prior_high)
-    sell = directional & df.trend.eq('BAIXA') & df.trend15.eq('BAIXA') & df.rsi.between(33,48) & df.close.lt(prior_low)
-    df['signal'] = np.select([buy,sell],['COMPRA','VENDA'],default='AGUARDAR')
-    # Explicação determinística da decisão, sem alegar probabilidade.
-    df['reason_code'] = np.select(
-        [df.trend15.eq('SEM CONFIRMAÇÃO'),
-         df.condition.eq('POSSÍVEL LATERALIZAÇÃO'),
-         df.trend15.ne(df.trend),
-         df.signal.eq('COMPRA'), df.signal.eq('VENDA')],
-        ['AQUECIMENTO_15M', 'LATERALIZACAO', 'TENDENCIAS_DIVERGENTES',
-         'FILTROS_COMPRA', 'FILTROS_VENDA'], default='FILTROS_INCOMPLETOS')
-    df.loc[:33,'signal']='AGUARDAR'
+    # Comparações usando o candle atual já fechado e apenas candles anteriores.
+    prior_high = df.high.shift(1).rolling(3, min_periods=3).max()
+    prior_low = df.low.shift(1).rolling(3, min_periods=3).min()
+    df['atr_mediana60'] = df.atr.shift(1).rolling(60, min_periods=60).median()
+    df['atr_ratio'] = df.atr / df.atr_mediana60.replace(0, np.nan)
+    df['candle_atr'] = (df.high-df.low) / df.atr.replace(0, np.nan)
+    has_trend = df.trend.isin(('ALTA', 'BAIXA'))
+    agreeing = has_trend & df.trend15.eq(df.trend)
+    rsi_ok = ((df.trend.eq('ALTA') & df.rsi.between(52, 67)) |
+              (df.trend.eq('BAIXA') & df.rsi.between(33, 48)))
+    breakout = ((df.trend.eq('ALTA') & df.close.gt(prior_high)) |
+                (df.trend.eq('BAIXA') & df.close.lt(prior_low)))
+    basic_ok = (df.atr.gt(0) & df.condition.eq('MOVIMENTO') & agreeing
+                & rsi_ok & breakout)
+    # Critérios demonstrativos de 0.65 a 1.8 vezes a mediana ATR anterior,
+    # candle máximo de 2.2 ATR. NÃO calibrados nem validados em WIN real.
+    regime_ok = df.atr_ratio.between(0.65, 1.8, inclusive='both')
+    spike_ok = df.candle_atr.le(2.2)
+    allowed = basic_ok if profile == 'base' else basic_ok & regime_ok & spike_ok
+    df['signal'] = np.select(
+        [allowed & df.trend.eq('ALTA'), allowed & df.trend.eq('BAIXA')],
+        ['COMPRA', 'VENDA'], default='AGUARDAR')
+    # O legado também exige o período inicial de 34 candles sem negociação.
+    df.loc[:33, 'signal'] = 'AGUARDAR'
+    warmup = (pd.Series(np.arange(len(df)), index=df.index) < (34 if profile == 'base' else 75))
+    if profile == 'seletivo':
+        df.loc[warmup, 'signal'] = 'AGUARDAR'
+    # A classificação dos motivos corresponde à ordem de bloqueio aplicada.
+    checks = [warmup, df.trend15.eq('SEM CONFIRMAÇÃO'),
+              df.atr.isna() | df.atr.le(0)]
+    codes = ['AQUECIMENTO', 'SEM_CONFIRMACAO_15M', 'ATR_INVALIDO']
+    if profile == 'seletivo':
+        checks.extend([df.atr_ratio.lt(0.65), df.atr_ratio.gt(1.8),
+                       df.candle_atr.gt(2.2)])
+        codes.extend(['VOLATILIDADE_BAIXA', 'VOLATILIDADE_ALTA', 'CANDLE_EXTREMO'])
+    checks.extend([df.condition.eq('POSSÍVEL LATERALIZAÇÃO'), ~has_trend,
+                   ~agreeing, ~rsi_ok, ~breakout,
+                   df.signal.eq('COMPRA'), df.signal.eq('VENDA')])
+    codes.extend(['LATERALIZACAO', 'SEM_DIRECAO', 'TENDENCIAS_DIVERGENTES',
+                  'RSI_FORA', 'SEM_ROMPIMENTO', 'FILTROS_COMPRA', 'FILTROS_VENDA'])
+    df['reason_code'] = np.select(checks, codes, default='AQUECIMENTO')
+    df['reason_detail'] = df.reason_code.map(REASON_LABELS)
+    df['profile'] = profile
     df['stop'] = np.where(df.signal.eq('COMPRA'),np.floor((df.close - 1.5*df.atr)/TICK)*TICK,
                    np.where(df.signal.eq('VENDA'),np.ceil((df.close+1.5*df.atr)/TICK)*TICK,np.nan))
     df['target'] = np.where(df.signal.eq('COMPRA'),np.ceil((df.close+2*df.atr)/TICK)*TICK,
