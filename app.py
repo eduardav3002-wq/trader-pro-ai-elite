@@ -1,4 +1,4 @@
-"""Trader Pro AI Elite v1.3 — laboratório descritivo de integridade, sem ordens."""
+"""Trader Pro AI Elite v1.4 — laboratório descritivo de integridade, sem ordens."""
 import json
 
 import pandas as pd
@@ -13,9 +13,10 @@ from provenance import inspect_historical_csv
 from historical import audit_exploratory_csv, historical_day_gate, CLOSED_2019, CLOSED_2020, CALENDAR_SOURCES
 from quality_lab import quality_triage
 from integrity_lab import assess_integrity, compare_daily_export
+from traceability_lab import read_contract_map, traceability_audit, EMPTY_TEMPLATE
 from engine import analyze, demo_data, HOLIDAYS_2026, market_day_gate, signal_entry_gate, ENTRY_GATE_LABELS
 
-st.set_page_config(page_title='Trader Pro AI Elite · v1.3',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
+st.set_page_config(page_title='Trader Pro AI Elite · v1.4',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
 st.markdown("""<style>
 :root {color-scheme:dark}
 .stApp{background:radial-gradient(ellipse at 100% 0%,#1f173f 0%,#0c1020 35%,#080c16 72%);color:#edf1ff}
@@ -62,11 +63,11 @@ section[data-testid="stSidebar"]{background:#11162a}
 }
 </style>""",unsafe_allow_html=True)
 
-st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V1.3</div>
+st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V1.4</div>
 <div class="hero-title">◈ TRADER PRO AI ELITE</div>
 <div class="hero-sub">WIN · Intraday · Filtros EMA 9/21, RSI 14, ATR 14 e tendência 15m</div>
 <span class="pill">● PESQUISA SEGURA · ORDENS DESATIVADAS</span></div>''',unsafe_allow_html=True)
-st.caption('v1.3 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
+st.caption('v1.4 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
 st.markdown('### 📁 Escolha como analisar')
 source = st.radio('Fonte dos candles', ['Demonstração fictícia', 'CSV histórico 2026 · origem declarada', '🔬 Explorar 2019–2020 · SEM backtest'], index=0, horizontal=False, label_visibility='collapsed')
 st.caption('Demonstração = dados fictícios. Histórico 2026 = validação estrita por contrato. Explorar 2019–2020 = auditoria sem sinais/backtest.')
@@ -171,7 +172,7 @@ with tab_historic:
             st.info(f"Conversão interna 1m → 5m: {r['conversao']['janelas_parciais_descartadas']} janelas incompletas descartadas; nenhum valor criado ou interpolado.")
         if r['pregoes_ausentes']:
             st.error('Datas esperadas sem registros: '+ ', '.join(r['pregoes_esperados_ausentes'][:12]))
-        st.subheader('🧬 Laboratório de Qualidade v1.3')
+        st.subheader('🧬 Laboratório de Qualidade v1.2')
         st.caption('Triagem descritiva — separa lacunas, aberturas e datas de rolagem. Nenhum dia é certificado, mesmo quando não aparece um alerta local.')
         triage,quality_summary=quality_triage(historical_candles,historical_daily,historical_gaps)
         q1,q2=st.columns(2)
@@ -186,6 +187,88 @@ with tab_historic:
         # v1.3: segunda auditoria derivada dos próprios candles, nunca de sinais ou P&L.
         integrity_days, integrity_events, integrity_months, integrity_expiries, integrity_summary = assess_integrity(
             historical_candles, historical_daily)
+        st.subheader('🧾 Rastreabilidade dos dados · v1.4')
+        st.caption('Dossiê de proveniência, mapa OPCIONAL de contratos alegados e pendências. Não autentica a fonte nem identifica rolagens por variação de preço.')
+        st.download_button('⬇️ Baixar modelo vazio de mapa de contratos', EMPTY_TEMPLATE,
+            'modelo_mapa_contratos_v14.csv', 'text/csv', use_container_width=True)
+        with st.expander('🧩 Mapa opcional de contratos (apenas declaração)', expanded=False):
+            st.caption('Colunas: inicio,fim,contrato,documento. Use AAAA-MM-DD, ticker como WINZ19 e uma referência que você possua. NÃO invente tickers pelo calendário. O mapa nunca torna um contrato comprovado.')
+            map_file=st.file_uploader('Carregar mapa CSV de contratos declarados',type=['csv'],key='contract_map_v14')
+        declared_map=None
+        map_sha=None
+        mapping_ok=True
+        if map_file is not None:
+            try:
+                declared_map,map_sha=read_contract_map(map_file.getvalue())
+                st.info(f'Mapa lido: {len(declared_map)} intervalo(s), exclusivamente declarados. A origem não foi autenticada.')
+            except (ValueError, TypeError, pd.errors.ParserError, UnicodeError) as exc:
+                mapping_ok=False
+                st.error('Mapa rejeitado; corrija o arquivo antes da auditoria: '+str(exc))
+        if mapping_ok:
+            try:
+                tracked_days, transitions, checklist, dossier=traceability_audit(
+                    historical_daily, integrity_days, r, declared_map, map_sha)
+                m1,m2=st.columns(2)
+                m1.metric('Dias com ticker alegado', dossier['dias_com_contrato_alegado'])
+                m2.metric('Dias sem ticker alegado', dossier['dias_sem_contrato_alegado'])
+                m1.metric('Mudanças declaradas (não comprovadas)', dossier['mudancas_de_ticker_declaradas'])
+                m2.metric('Dias certificados', dossier['dias_certificados'])
+                st.error('🛑 Origem primária, ticker por candle e ajustes de rolagem NÃO comprovados. Backtest e ordens seguem bloqueados, inclusive se preencher o mapa.')
+                st.caption('SHA-256 do arquivo recebido: '+dossier['sha256_historico_recebido'][:24]+'… (identidade de bytes, NÃO autenticidade)')
+                if dossier['dias_declarados_apos_vencimento_nominal']:
+                    st.warning(f"{dossier['dias_declarados_apos_vencimento_nominal']} dia(s) foram atribuídos a um ticker já posterior à sua data nominal de vencimento. Confira o mapa e possíveis exceções oficiais.")
+                st.markdown('**📱 Ver contratos alegados por dia**')
+                filter_map=st.selectbox('Mostrar datas', ['Sem ticker informado','Todas as datas','Com ticker declarado','Após vencimento nominal alegado'],key='trace_map_filter_v14')
+                if filter_map=='Sem ticker informado':
+                    show_days=tracked_days[tracked_days.status_contrato.eq('SEM_MAPA_DE_CONTRATO')]
+                elif filter_map=='Com ticker declarado':
+                    show_days=tracked_days[tracked_days.status_contrato.ne('SEM_MAPA_DE_CONTRATO')]
+                elif filter_map=='Após vencimento nominal alegado':
+                    show_days=tracked_days[tracked_days.apos_vencimento_nominal_do_contrato_alegado]
+                else:
+                    show_days=tracked_days
+                st.caption(f'{len(show_days)} data(s). Exibindo até seis cartões; relatório CSV completo abaixo.')
+                for record in show_days.head(6).to_dict('records'):
+                    with st.container(border=True):
+                        st.write('**'+record['dia']+'** · '+record['contrato_alegado'])
+                        st.caption(record['status_contrato'].replace('_',' ').capitalize())
+                        st.caption('Documento informado: '+(str(record['documento_alegado'])[:100] or 'nenhum'))
+                        if record['apos_vencimento_nominal_do_contrato_alegado']:
+                            st.warning('⚠️ Contrato alegado posterior ao vencimento nominal; investigar')
+                st.markdown('**🧭 Fronteiras entre sessões**')
+                transitions_filter=st.selectbox('Classe de fronteiras', ['Sem ticker conhecido','Todas','Mudança declarada','Mesmo ticker alegado'],key='trace_boundaries_v14')
+                codes={'Sem ticker conhecido':'TICKER_INDETERMINADO',
+                       'Mudança declarada':'MUDANCA_DECLARADA_NAO_COMPROVADA',
+                       'Mesmo ticker alegado':'MESMO_TICKER_ALEGADO_SEM_AUTENTICACAO'}
+                selected_transitions=transitions if transitions_filter=='Todas' else transitions[transitions.situacao.eq(codes[transitions_filter])]
+                st.caption(f'{len(selected_transitions)} fronteira(s); até quatro cartões na tela.')
+                for row in selected_transitions.head(4).to_dict('records'):
+                    with st.container(border=True):
+                        st.write(f"**{row['dia_anterior']} → {row['dia_seguinte']}**")
+                        st.write(f"{row['ticker_anterior_alegado']} → {row['ticker_seguinte_alegado']}")
+                        st.caption(row['situacao'].replace('_',' ').capitalize())
+                        st.caption('Diferença entre preços observados: '+
+                                   ('indisponível' if row['diferenca_entre_sessoes_pts'] is None else f"{row['diferenca_entre_sessoes_pts']:+.0f} pts")+
+                                   '. Não é prova de rolagem.')
+                st.markdown('**🧩 Evidências necessárias antes de validar o histórico**')
+                for record in checklist.to_dict('records'):
+                    with st.expander(record['requisito']+' · '+record['situacao'].replace('_',' ').lower()):
+                        st.write(record['proxima_evidencia_necessaria'])
+                st.download_button('⬇️ Baixar rastreabilidade por dia (CSV)',
+                    tracked_days.to_csv(index=False).encode('utf-8-sig'),
+                    'rastreabilidade_win_por_dia_v14.csv','text/csv',use_container_width=True)
+                st.download_button('⬇️ Baixar fronteiras entre sessões (CSV)',
+                    transitions.to_csv(index=False).encode('utf-8-sig'),
+                    'fronteiras_contratuais_v14.csv','text/csv',use_container_width=True)
+                st.download_button('⬇️ Baixar pendências de evidência (CSV)',
+                    checklist.to_csv(index=False).encode('utf-8-sig'),
+                    'pendencias_rastreabilidade_v14.csv','text/csv',use_container_width=True)
+                st.download_button('⬇️ Baixar dossiê de rastreabilidade (JSON)',
+                    json.dumps(dossier,ensure_ascii=False,indent=2).encode('utf-8'),
+                    'dossie_rastreabilidade_win_v14.json','application/json',use_container_width=True)
+            except (ValueError,TypeError,KeyError) as exc:
+                st.error('Rastreabilidade indisponível: '+str(exc))
+        st.divider()
         st.subheader('🧭 Integridade dos contratos · v1.3')
         st.caption('Pesquisa DESCRITIVA: avalia lacunas de tempo, diferenças de preço entre observações e janelas nominais de vencimento. Não identifica por si só a rolagem nem confirma a origem das cotações.')
         a,b=st.columns(2)
@@ -223,13 +306,13 @@ with tab_historic:
             with st.expander(f"{ex['vencimento_nominal']} · {ex['dias_observados_na_janela']} dias na janela ±2 dias"):
                 st.write(f"{ex['dias_com_lacunas']} dias com lacunas · {ex['dias_abertura_divergente']} com abertura divergente")
                 st.caption('Sem identificação do contrato por candle; não é possível dizer em qual dia houve rolagem ou se os preços foram ajustados.')
-        st.download_button('⬇️ Baixar integridade por dia v1.3 (CSV)',
+        st.download_button('⬇️ Baixar integridade por dia v1.4 (CSV)',
             integrity_days.to_csv(index=False).encode('utf-8-sig'),
             'integridade_win_por_dia_v13.csv','text/csv',use_container_width=True)
-        st.download_button('⬇️ Baixar eventos de continuidade v1.3 (CSV)',
+        st.download_button('⬇️ Baixar eventos de continuidade v1.4 (CSV)',
             integrity_events.to_csv(index=False).encode('utf-8-sig'),
             'eventos_continuidade_win_v13.csv','text/csv',use_container_width=True)
-        st.download_button('⬇️ Baixar qualidade por mês v1.3 (CSV)',
+        st.download_button('⬇️ Baixar qualidade por mês v1.4 (CSV)',
             integrity_months.to_csv(index=False).encode('utf-8-sig'),
             'integridade_win_por_mes_v13.csv','text/csv',use_container_width=True)
         st.download_button('⬇️ Baixar janelas nominais de vencimento (CSV)',
@@ -708,4 +791,4 @@ with tab_data:
     st.caption('A v1.1 não baixa dados de terceiros, não verifica licenças, não acessa cotações ao vivo e não envia ordens. Resultado retrospectivo não prevê acertos futuros.')
 
 st.divider()
-st.caption('Trader Pro AI Elite · v1.3 · Simulador de pesquisa. Horários de referência B3 para 2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')
+st.caption('Trader Pro AI Elite · v1.4 · Simulador de pesquisa. Horários de referência B3 para 2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')

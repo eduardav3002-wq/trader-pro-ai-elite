@@ -1,73 +1,77 @@
-# ◈ Trader Pro AI Elite v1.3 — Laboratório de Integridade de Contratos
+# ◈ Trader Pro AI Elite v1.4 — Rastreabilidade dos dados
 
-Pesquisa **exploratória** de dados históricos WIN (2019–2020), sem ordens, mercado ao vivo ou backtest desta série. Design premium roxo/escuro para celular. **Não é IA treinada** nem possui taxa de acerto comprovada.
+**Aplicativo experimental para pesquisa de mini-índice WIN, com interface Streamlit responsiva para celular.**
 
-## Atualizar pelo celular (GitHub + Streamlit Cloud)
+A versão 1.4 amplia os laboratórios de qualidade (v1.2) e integridade (v1.3) com um **dossiê de rastreabilidade** de séries 2019–2020. Não possui IA treinada, acesso a mercado ao vivo, execução de ordens nem resultados de mercado comprovados. **A análise exploratória não produz sinais ou backtests**.
 
-1. Baixe **Trader_Pro_AI_Elite_v1_3_GitHub.zip** e extraia no celular.
-2. No **mesmo repositório GitHub** ligado ao app atual, escolha **Add file → Upload files**. Envie os **20 arquivos extraídos**, na raiz, substituindo os nomes existentes. **Não** envie o arquivo .zip sozinho.
-3. Confirme **Commit changes** na branch `main`. O arquivo principal continua `app.py`.
-4. Reabra o aplicativo Streamlit. Verifique o cabeçalho **RESEARCH TERMINAL · V1.3**.
-5. Selecione **🔬 Explorar 2019–2020 · SEM backtest** e envie novamente o CSV de candles já disponível (`WIN_2019_2020_5min_exploratorio.csv`) ou o `data.csv` original.
-6. Abra a aba **🔬 Histórico**, vá a **🧭 Integridade dos contratos · v1.3** e use os cartões/filtros e exportações.
-7. Opcionalmente, no campo **Conferir CSV de qualidade por dia da v1.2**, envie `qualidade_por_dia_win_v12.csv` para cotejar datas e quantidades; isso verifica apenas consistência estrutural, não autenticidade dos preços.
+## Atualização pelo Android — GitHub + Streamlit Cloud
 
-**Não inclua dados históricos obtidos de terceiros no seu repositório público** sem verificar as condições de uso. O ZIP inclui apenas código, testes, dependências e documentação. Se o Streamlit Cloud estiver conectado ao repositório, em geral redeployará após o commit. Não precisa pagar Replit nem executar Python no celular.
+1. Baixe o ZIP `Trader_Pro_AI_Elite_v1_4_GitHub.zip` e **extraia** no celular.
+2. No mesmo repositório usado pelo Streamlit: **Add file → Upload files** e selecione os **22 arquivos extraídos na raiz**, substituindo arquivos com o mesmo nome. **Não envie o ZIP** como se fosse código.
+3. Confirme **Commit changes** na branch `main`. O arquivo principal permanece `app.py`.
+4. Abra o mesmo endereço da aplicação Streamlit e confira **RESEARCH TERMINAL · V1.4**.
+5. Escolha **🔬 Explorar 2019–2020 · SEM backtest** e carregue o arquivo local `WIN_2019_2020_5min_exploratorio.csv` (ou o original de 1 minuto) na interface; **não publique dados de terceiros no repositório**.
+6. Na aba **🔬 Histórico**, veja o novo painel **🧾 Rastreabilidade dos dados · v1.4**, seguido pelas seções de integridade v1.3 e qualidade v1.2.
+7. Opcionalmente, baixe o modelo CSV vazio de contratos na própria interface. **Só preencha datas, tickers e referências que você tenha como documentar.** Um contrato presumido a partir de preço, mês ou calendário é apenas palpite e deve permanecer não informado.
 
-## O que mudou na v1.3
+## O que faz a v1.4
 
-O módulo novo `integrity_lab.py` produz **cinco saídas exploratórias**:
+O módulo `traceability_lab.py` oferece:
 
-- **Integridade por dia**: reconcilia os candles com o relatório diário recalculado, relaciona lacunas, abertura divergente, maior variação entre sessões, proximidade e dia nominal de vencimento. Todos os dias permanecem `NAO_CERTIFICADO` e `backtest_liberado=False`.
-- **Eventos de continuidade**: separa explicitamente **lacunas temporais**, **variações entre candles consecutivos** e **variações entre sessões**. Jamais atravessa um candle ausente para tratar dois preços como consecutivos.
-- **Comparação mensal**: total observado, dias com lacunas, candles ausentes entre extremos, aberturas divergentes e alertas exploratórios por mês.
-- **Janelas ±2 dias das datas de vencimento nominais**: pontos para conferência de eventual rolagem; **não detecta o contrato que estava em negociação** nem confirma ajuste, continuidade ou troca efetiva.
-- **Resumo JSON e comparação opcional** com `qualidade_por_dia_win_v12.csv`: nomes e totais verificados, sem afirmar autenticidade primária.
+- **Dossiê da entrada** com nome, origem *declarada* pelo usuário e hash SHA-256 dos **bytes recebidos**. O hash detecta diferenças de bytes entre arquivos comparados, mas não prova que os dados vieram da B3.
+- **Mapa opcional de contratos declarados**, usando `inicio,fim,contrato,documento` com datas `AAAA-MM-DD`, intervalo não sobreposto e códigos `WIN[G/J/M/Q/V/Z][ano com dois dígitos]`. O campo `documento` é texto/URL fornecido pelo usuário, **não uma comprovação automática**. Se o CSV estiver incorreto, ele é rejeitado antes da análise.
+- **Análise de vencimentos NOMINAIS**, segundo a quarta-feira mais próxima do dia 15 dos meses pares. Se uma atribuição cruzar essa data, gera um aviso investigativo; NÃO determina o último negócio, a real negociação ou as regras excepcionais daquele período.
+- **Fronteiras entre pregões**: separa `TICKER_INDETERMINADO`, `MESMO_TICKER_ALEGADO_SEM_AUTENTICACAO` e `MUDANCA_DECLARADA_NAO_COMPROVADA`. As diferenças de preço são mostradas ao lado, mas **não confirmam rolagem**.
+- **Lista de pendências de evidência**: fornecedor primário, ticker por candle, critérios de rolagem, fuso, abertura/encerramento, explicação das lacunas, licença dos dados.
+- **Relatórios para download**: rastreabilidade por dia (CSV), fronteiras entre pregões (CSV), pendências (CSV) e dossiê (JSON).
+- **Layout mobile** com cartões e filtros limitados a poucos registros na tela, preservando toda a análise nos arquivos CSV/JSON.
 
-**Metodologia de alertas de preço:** `abs(abertura_atual - fechamento_anterior)` é avaliada entre *candles adjacentes de 5 minutos do mesmo pregão*, sem saltos de tempo, e o limiar de destaque é o máximo entre 20 pontos e o percentil 99,9% da amostra arredondado para múltiplos de 5. Entre pregões, o limiar de destaque é o percentil 95 do valor absoluto das diferenças entre o último fechamento observado e a primeira abertura observada seguinte. Os percentis são calculados **sobre a própria amostra** e são **apenas estatísticas descritivas**, não critérios de preço errado, detecção de rolagem ou parâmetros válidos para trading. As variações entre pregões podem ser movimentos normais de mercado.
+### Modelo de contrato (opcional)
 
-## Conferência com o CSV fornecido
+O download na aplicação traz **somente o cabeçalho**:
 
-A conferência por data e contagem do arquivo `qualidade_por_dia_win_v12.csv` enviado pelo usuário bateu **integralmente** com a auditoria regenerada do arquivo de candles desta conversa: **181 dias, zero divergências estruturais**. Isso **não verifica** origem, ticker, contrato, qualidade dos negócios reais ou direitos de redistribuição.
+```csv
+inicio,fim,contrato,documento
+```
 
-Resumo dos resultados da amostra de pesquisa:
+Para informar uma hipótese, o campo `documento` deve conter a referência disponível e a fonte ainda precisa ser verificada independentemente. **Não invente datas de rolagem nem reutilize o exemplo de ticker como evidência.** Um mapa preenchido NUNCA muda `backtest_liberado` para verdadeiro.
 
-| Medida | Resultado |
+### Resultado do arquivo público analisado
+
+| Item | Valor |
 |---|---:|
-| Candles observados de 5 minutos | 19.257 |
-| Pregões com registros | 181 |
-| Saltos de tempo intradiários | 72 |
-| Candles de 5 minutos faltantes entre os extremos observados | 166 |
-| Dias com lacunas | 15 |
-| Dias com abertura divergente da referência adotada | 64 |
-| Comparações de candles adjacentes no mesmo dia | 19.004 |
-| Diferenças de preço adjacente ≥ limiar descritivo (30 pontos nessa amostra) | 24 |
-| Diferenças entre sessões no top 5% empírico | 9 |
-| Datas nominais de vencimento no recorte | 5 |
-| Dias aptos para backtest/negociação | **0** |
+| Dias com candles | 181 |
+| Fronteiras entre pregões | 180 |
+| Dias com ticker comprovado | **0** |
+| Dias com ticker alegado sem mapa adicional | 0 |
+| Dias sem ticker informado no dossiê atual | 181 |
+| Origem primária confirmada | **Não** |
+| Dias certificados para backtest | **0** |
 
-Concentração das barras faltantes entre extremos: **março de 2020 (157)** e **abril de 2020 (9)**, segundo a amostra. **Não presumir** que a causa seja circuit breaker, falta de negócios ou problema na origem. Nenhum fechamento diário foi certificado.
+O arquivo público **não contém ticker por candle** e não informa os critérios de formação da série. A presença de preços 2019–2020 e de datas nominais de vencimento **não permite identificar automaticamente os contratos negociados**.
 
-Os arquivos de origem de 1 minuto e convertido para 5 minutos produzem os **mesmos totais** nesta análise. O app recalcula internamente quando importa o arquivo, sem precisar enviar relatório diário antigo.
+## Segurança e limitações
 
-## Controle de risco e limitações
+- Esta aplicação não gera ordens, nem habilita automação de execução.
+- O modo **2019–2020** nunca chama `analyze` ou `backtest` e não promove informações declaradas a autenticadas.
+- O modo histórico rigoroso de **2026** é mantido sem alterações de calendário; exige arquivo e contrato individual conforme validação anterior.
+- Os avisos de 2019–2020 não corrigem lacunas, não ajustam preços, não atribuem contratos e não inferem eventos de mercado com base em saltos.
+- Mesmo o melhor dia da série permanece **não certificado**, inclusive com mapa preenchido ou referência informada pelo usuário.
+- Os parâmetros de preço destacados na v1.3 são percentis descritivos calculados sobre a própria amostra. Não são teste independente, prova de erro ou estratégia lucrativa.
+- Os horários de encerramento por data, eventuais suspensões, ticker real, direitos de uso, política de emenda/ajuste e origem primária **não foram auditados externamente**.
+- Quando novos dados autenticados forem obtidos, será necessário criar uma **etapa separada de validação**, não simplesmente liberar o bloqueio atual.
 
-- Dados de 2019–2020: **sem sinais, sem backtest e sem ordens** — não chamar motor `engine.analyze()` ou `backtest()` nesse modo.
-- 2026: o modo rigoroso anterior é preservado (calendário e bloqueios mantidos). Não foi alterado para aceitar o histórico antigo.
-- A ausência de lacunas detectadas não prova encerramento, origem, fuso, negociação ou continuidade de série.
-- O arquivo público não informa o **código de vencimento** do contrato por candle nem se contém emenda/ajuste de rolagem.
-- Os horários e o calendário de 2019/2020 são referências com exceções documentadas, mas as sessões finais por data não foram autenticadas.
-- O SHA-256 verifica apenas identidade de bytes, **não** procedência dos negócios na B3.
-- O aplicativo é um laboratório de pesquisa; **não usar para decisões de investimento com dinheiro real**.
+## Fontes externas de referência (não autenticam a amostra)
 
-## Fontes oficiais de referência
-
-- [B3 — futuro mini de Ibovespa (WIN): variação mínima e vencimentos](https://www.b3.com.br/pt_br/produtos-e-servicos/negociacao/renda-variavel/futuro-mini-de-ibovespa.htm)
+- [B3 — especificações atuais do futuro mini de Ibovespa](https://www.b3.com.br/pt_br/produtos-e-servicos/negociacao/renda-variavel/futuro-mini-de-ibovespa.htm)
 - [B3 — calendário de 2019](https://www.b3.com.br/data/files/F8/B3/88/A0/33E97610F157B776AC094EA8/CL%20049-2018_EN_VOP%20Feriados%202019_v7%20R_2.pdf)
 - [B3 — calendário de 2020](https://www.b3.com.br/data/files/97/C7/BB/E1/F50BF6109A4874F6AC094EA8/OC%20003-2020-VOP%20Feriados%202020.pdf)
-- [B3 — exceções de negociação em 2020](https://www.b3.com.br/pt_br/noticias/funcionamento-da-b3-8AE490C97215B74E0172959F18F11323.htm)
+- [B3 — exceções de funcionamento em 2020](https://www.b3.com.br/pt_br/noticias/funcionamento-da-b3-8AE490C97215B74E0172959F18F11323.htm)
+- [GitHub — FGV_Trabalho_WIN, origem secundária do arquivo público](https://github.com/BernardoAflalo/FGV_Trabalho_WIN)
 
-## Testar desenvolvimento (opcional, pelo computador)
+As especificações atualmente publicadas pela B3 são usadas como referência geral e **não comprovam condições contratuais históricas em cada sessão**.
+
+## Testes locais (opcionais; você não precisa executar no celular)
 
 ```bash
 pip install -r requirements.txt
@@ -76,4 +80,4 @@ pytest -q
 streamlit run app.py
 ```
 
-**79 testes automatizados passaram no ambiente de desenvolvimento**, incluindo os testes legados. Isso não substitui o teste da tela após a atualização no Streamlit Cloud. Mantemos os módulos `historical.py`, `quality_lab.py`, `engine.py`, `backtest.py` e seus testes, sem alterar o código de ordem/execução.
+**101 testes automatizados passaram em 22/11/2026**, incluindo a suíte anterior. O ZIP foi extraído e testado novamente. Isso verifica regras do código e consistência dos arquivos, **não comprova a interface em produção nem desempenho financeiro**.
