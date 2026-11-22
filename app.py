@@ -341,6 +341,48 @@ with tab_data:
     holidays=pd.DataFrame({'Feriados B3 2026': [x.strftime('%d/%m/%Y') for x in sorted(HOLIDAYS_2026)]})
     st.dataframe(holidays,hide_index=True,use_container_width=True)
     st.caption('Fonte oficial: https://www.b3.com.br/pt_br/noticias/calendario-de-negociacao-da-b3-confira-o-funcionamento-da-bolsa-em-2026.htm')
+    st.markdown('---')
+    st.subheader('🧪 Autoteste de calendário — sem dados de mercado')
+    st.caption('O teste gera candles ARTIFICIAIS apenas na memória e confere três travas: validação do CSV, bloqueio do dia e elegibilidade de entrada. Não declara origem histórica nem mede resultados de trading.')
+    if st.button('🛡️ Executar autoteste de feriados', key='calendar_selftest_07', use_container_width=True):
+        from engine import validate_win_candles
+        scenarios = [
+            ('19/11/2026 · dia útil', '2026-11-19', None, 'ELEGIVEL_HORARIO', None),
+            ('20/11/2026 · feriado B3', '2026-11-20', 'FERIADO_B3', 'FERIADO_B3', 'feriado da B3'),
+            ('21/11/2026 · sábado', '2026-11-21', 'FIM_DE_SEMANA', 'FIM_DE_SEMANA', 'sábado/domingo'),
+            ('02/01/2027 · ano não validado', '2027-01-02', 'CALENDARIO_NAO_VALIDADO', 'CALENDARIO_NAO_VALIDADO', 'calendário B3 de 2026'),
+        ]
+        example = demo_data(days=1)
+        report = []
+        for label, day, expected_day_block, expected_gate, expected_error in scenarios:
+            candidate = example.copy()
+            shift = pd.Timestamp(day + ' 09:00') - candidate.datetime.iloc[0]
+            candidate['datetime'] = candidate.datetime + shift
+            clock = pd.Timestamp(day + ' 10:00')
+            actual_day_block = market_day_gate(clock)
+            actual_gate = signal_entry_gate('COMPRA', clock, clock + pd.Timedelta(minutes=5), contract='WINZ26')
+            got_rejected = False
+            error_message = ''
+            try:
+                validate_win_candles(candidate, require_complete_sessions=True, contract='WINZ26')
+            except ValueError as exc:
+                got_rejected = True
+                error_message = str(exc)
+            expected_rejection = expected_error is not None
+            passed = (actual_day_block == expected_day_block and actual_gate == expected_gate
+                      and got_rejected == expected_rejection
+                      and (not expected_error or expected_error in error_message))
+            report.append({'Data': label,
+                           'Candles': 'BLOQUEADOS' if got_rejected else 'ACEITOS',
+                           'Sinal': actual_gate,
+                           'Teste': 'PASSOU' if passed else 'FALHOU'})
+        count = sum(item['Teste'] == 'PASSOU' for item in report)
+        if count == len(report):
+            st.success(f'✅ {count}/{len(report)} verificações aprovadas: o calendário rejeitou feriado, sábado e ano não validado.')
+        else:
+            st.error(f'⚠️ {count}/{len(report)} verificações aprovadas. Confira as regras antes de confiar no bloqueio.')
+        st.dataframe(pd.DataFrame(report), use_container_width=True, hide_index=True)
+        st.caption('Importante: este autoteste verifica regras previstas no código. Não autentica calendário para outros anos, feriados extraordinários ou negociações reais.')
     st.caption('A v0.7 não baixa dados de terceiros, não verifica licenças, não acessa cotações ao vivo e não envia ordens. Resultado retrospectivo não prevê acertos futuros.')
 
 st.divider()
