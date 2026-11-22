@@ -1,4 +1,49 @@
-# ◈ Trader Pro AI Elite v1.4 — Rastreabilidade dos dados
+# ◈ Trader Pro AI Elite v1.5 — Laboratório de Fonte M1
+
+**WIN intraday · Streamlit responsivo · sem ordens reais, sem IA treinada e sem previsão garantida.**
+
+## Atualizar pelo Android
+
+1. Extraia `Trader_Pro_AI_Elite_v1_5_GitHub.zip` no telefone.
+2. No GitHub do mesmo projeto, envie **os 24 arquivos extraídos**, diretamente para a **raiz** do repositório, substituindo os existentes. Não envie o ZIP como um único arquivo.
+3. Confirme o commit na `main`, depois abra seu Streamlit. O arquivo de entrada continua `app.py`.
+4. Confira `RESEARCH TERMINAL · V1.5` no topo. Se demorar, aguarde apenas o carregamento normal do site e verifique logs de deploy em caso de erro.
+5. Para o novo módulo, selecione **🧾 Conferir CSV com ticker · SEM backtest**, carregue o arquivo M1, declare fonte e fuso, e abra a aba **🧾 Fonte M1**.
+
+## Por que esta versão?
+
+Encontramos uma **amostra pública de um dia**, intitulada `WINZ22_M1_2022-10-31.csv`, com coluna `Contrato=WINZ22`, preços originais `Open/High/Low/Close` e preços ajustados `Open_Adj/...`. Isso é mais rico em metadados do que o CSV contínuo 2019–2020, mas **a identificação continua declarada pelo arquivo, não autenticada independentemente**. Uma única sessão não valida rentabilidade.
+
+Fonte externa consultada (baixe no seu celular pelo botão **Raw**, se desejar):
+https://gist.github.com/alcindogandhi/0aa56106c3e374c344569b55facbf9d3
+
+Não redistribuímos esse arquivo público no pacote. O autor não documenta nesta página a origem primária das cotações nem o fuso.
+
+## Novo módulo `source_lab.py`
+
+- Lê CSV/TSV UTF-8 com `Datetime,Contrato,Open,High,Low,Close`, opcionalmente `DataReferencia`, `Volume`, `Open_Adj`, `High_Adj`, `Low_Adj`, `Close_Adj`, `Ajuste`.
+- Exige **ticker individual** (ex.: `WINZ22`); rejeita data/hora inválida, duplicação por minuto/contrato, linhas fora de ordem, OHLC inconsistente e preços fora da grade de 5 pontos.
+- Conta faltas dentro dos registros e avisa se registros declarados aparecem após vencimento nominal; não valida automaticamente horário oficial ou pregão completo.
+- Se houver os quatro campos ajustados, mantém séries **originais e ajustadas distintas** e verifica inconsistências na diferença. Ajuste observado não é evidência de rolagem.
+- Constrói candles de 5 minutos **somente com 5 minutos consecutivos completos**, sem preencher janelas parciais. Exportação rotulada EXPLORATÓRIA, nunca certificada.
+- Entrega resumo JSON, relatório diário, lacunas M1 e M5 exploratório. Nenhuma dessas saídas alimenta sinais/backtest nesta versão.
+- A fonte e o fuso são declarações; o SHA-256 identifica os bytes recebidos, mas **não autentica cotações**.
+
+Amostra externa e saída do módulo **NÃO são suficientes para operações**, e não substituem a investigação do histórico 2019–2020. Mantenha os modos anteriores da v1.4.
+
+## Estado de segurança
+
+**0 pregões certificados na nova fonte; backtest NÃO liberado e ordens NÃO habilitadas.** O bloqueio obrigatório dos feriados da B3 de 2026 continua inalterado no motor existente. Para validar outro ano, seria necessário conferir seu calendário, sessões, tickers e origem de maneira independente.
+
+## Testes
+
+**116 testes automatizados aprovados** no pacote v1.5; isso não comprova desempenho ou funcionamento do site publicado. O Streamlit não estava instalado neste ambiente de construção e precisa ser conferido na implantação real.
+
+---
+
+## Histórico: laboratório de rastreabilidade v1.4
+
+# ◈ Trader Pro AI Elite v1.4 — Rastreabilidade dos dados (funcionalidade preservada)
 
 **Aplicativo experimental para pesquisa de mini-índice WIN, com interface Streamlit responsiva para celular.**
 

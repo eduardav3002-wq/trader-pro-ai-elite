@@ -1,4 +1,4 @@
-"""Trader Pro AI Elite v1.4 — laboratório descritivo de integridade, sem ordens."""
+"""Trader Pro AI Elite v1.5 — inspeção de dados M1 com ticker, sem ordens."""
 import json
 
 import pandas as pd
@@ -14,9 +14,10 @@ from historical import audit_exploratory_csv, historical_day_gate, CLOSED_2019, 
 from quality_lab import quality_triage
 from integrity_lab import assess_integrity, compare_daily_export
 from traceability_lab import read_contract_map, traceability_audit, EMPTY_TEMPLATE
+from source_lab import inspect_ticker_m1
 from engine import analyze, demo_data, HOLIDAYS_2026, market_day_gate, signal_entry_gate, ENTRY_GATE_LABELS
 
-st.set_page_config(page_title='Trader Pro AI Elite · v1.4',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
+st.set_page_config(page_title='Trader Pro AI Elite · v1.5',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
 st.markdown("""<style>
 :root {color-scheme:dark}
 .stApp{background:radial-gradient(ellipse at 100% 0%,#1f173f 0%,#0c1020 35%,#080c16 72%);color:#edf1ff}
@@ -63,14 +64,14 @@ section[data-testid="stSidebar"]{background:#11162a}
 }
 </style>""",unsafe_allow_html=True)
 
-st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V1.4</div>
+st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V1.5</div>
 <div class="hero-title">◈ TRADER PRO AI ELITE</div>
 <div class="hero-sub">WIN · Intraday · Filtros EMA 9/21, RSI 14, ATR 14 e tendência 15m</div>
 <span class="pill">● PESQUISA SEGURA · ORDENS DESATIVADAS</span></div>''',unsafe_allow_html=True)
-st.caption('v1.4 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
+st.caption('v1.5 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
 st.markdown('### 📁 Escolha como analisar')
-source = st.radio('Fonte dos candles', ['Demonstração fictícia', 'CSV histórico 2026 · origem declarada', '🔬 Explorar 2019–2020 · SEM backtest'], index=0, horizontal=False, label_visibility='collapsed')
-st.caption('Demonstração = dados fictícios. Histórico 2026 = validação estrita por contrato. Explorar 2019–2020 = auditoria sem sinais/backtest.')
+source = st.radio('Fonte dos candles', ['Demonstração fictícia', 'CSV histórico 2026 · origem declarada', '🔬 Explorar 2019–2020 · SEM backtest', '🧾 Conferir CSV com ticker · SEM backtest'], index=0, horizontal=False, label_visibility='collapsed')
+st.caption('Demonstração = fictícia. Históricos = auditoria de origem declarada. O novo modo com ticker é apenas inspeção, SEM sinais ou backtest.')
 with st.sidebar:
     st.header('⚙️ Central de controle')
     chart_bars=st.slider('Candles no gráfico',30,180,75,15)
@@ -90,6 +91,10 @@ historical_report=None
 historical_daily=None
 historical_gaps=None
 historical_candles=None
+source_m1_report=None
+source_m1_daily=None
+source_m1_gaps=None
+source_m1_m5=None
 if source.startswith('CSV histórico'):
     st.subheader('📁 Importação histórica — dados fornecidos pelo usuário')
     st.info('Obtenha o CSV de uma plataforma/fornecedor que tenha direito de fornecer WIN intraday. O app não busca dados da B3 automaticamente e não pode verificar a origem externa.')
@@ -138,6 +143,24 @@ elif source.startswith('🔬 Explorar'):
             st.caption('SHA-256 recebido: ' + historical_report['sha256_recebido'][:24] + '…')
         except (ValueError,TypeError,pd.errors.ParserError,UnicodeError) as exc:
             st.error(f'Arquivo exploratório rejeitado: {exc}')
+elif source.startswith('🧾 Conferir'):
+    st.subheader('🧾 Inspeção de fonte com contrato — v1.5')
+    st.info('Laboratório M1: confere ticker declarado, integridade OHLC, minutos ausentes e diferença entre preços originais e ajustados. NÃO faz backtest e NÃO autentica a bolsa.')
+    source_m1_upload=st.file_uploader('Carregue CSV/TSV de candles de 1 minuto com coluna Contrato',
+                                     type=['csv','tsv','txt'],key='source_m1_15')
+    source_m1_name=st.text_input('Fonte declarada',value='GitHub Gist público (não autenticado)',key='source_m1_provider_15')
+    source_m1_timezone=st.selectbox('Fuso original declarado', ['Desconhecido','America/Sao_Paulo (declarado)'],key='source_m1_tz_15')
+    st.caption('Exemplo de arquivo para estudar: WINZ22_M1_2022-10-31.csv. Não precisa alterar o CSV nem preencher dados ausentes.')
+    if source_m1_upload is None:
+        st.info('Envie o CSV e abra a aba 🧾 Fonte M1. Dados de um único pregão não permitem validar uma estratégia.')
+    else:
+        try:
+            source_m1_report,source_m1_daily,source_m1_gaps,source_m1_m5=inspect_ticker_m1(
+                source_m1_upload.getvalue(), source_m1_name, source_m1_timezone, source_m1_upload.name)
+            st.success(f"Arquivo lido: {source_m1_report['minutos_m1']} candles M1 · ticker(s) declarado(s): {', '.join(source_m1_report['tickers_declarados'])}.")
+            st.warning('🛑 Não autenticado. Mesmo com contrato informado e preços ajustados, sinais, backtest e ordens seguem DESATIVADOS neste modo.')
+        except (ValueError,TypeError,pd.errors.ParserError,UnicodeError) as exc:
+            st.error(f'CSV com ticker rejeitado: {exc}')
 else:
     try:
         out=analyze(demo_data(),profile=profile)
@@ -148,7 +171,7 @@ else:
         st.error(f'Erro na demonstração: {exc}')
     st.warning('DEMONSTRAÇÃO 100% FICTÍCIA: candles e operações são INVENTADOS. Não avaliam eficácia no mercado.')
 
-tab_historic,tab_terminal,tab_decision,tab_bt,tab_robust,tab_audit,tab_data=st.tabs(['🔬 Histórico','📈 Sinais','🛑 Não operar','🧪 Backtest','🧬 Robustez','🛡️ Auditoria','🔐 Dados'])
+tab_historic,tab_terminal,tab_decision,tab_bt,tab_robust,tab_audit,tab_data,tab_source=st.tabs(['🔬 Histórico','📈 Sinais','🛑 Não operar','🧪 Backtest','🧬 Robustez','🛡️ Auditoria','🔐 Dados','🧾 Fonte M1'])
 
 with tab_historic:
     st.subheader('🔬 Auditoria histórica 2019–2020')
@@ -790,5 +813,55 @@ with tab_data:
         st.caption('Importante: este autoteste verifica regras previstas no código. Não autentica calendário para outros anos, feriados extraordinários ou negociações reais.')
     st.caption('A v1.1 não baixa dados de terceiros, não verifica licenças, não acessa cotações ao vivo e não envia ordens. Resultado retrospectivo não prevê acertos futuros.')
 
+with tab_source:
+    st.subheader('🧾 Laboratório de fonte com ticker · v1.5')
+    st.caption('Amostras M1 com contrato explícito. Distingue preço ORIGINAL de AJUSTADO sem afirmar que os dados são da B3. Não realiza operações.')
+    if source_m1_report is None:
+        st.info('Na seleção de fonte, escolha “🧾 Conferir CSV com ticker” e envie seu CSV M1 para gerar a inspeção.')
+    else:
+        sr=source_m1_report
+        a,b=st.columns(2)
+        a.metric('Candles M1 observados',sr['minutos_m1'])
+        b.metric('Candles M5 completos',sr['candles_m5_completos'])
+        a.metric('Minutos fora de janelas M5',sr['minutos_nao_agregados_em_m5'])
+        b.metric('Saltos internos M1',sr['saltos_de_tempo'])
+        st.markdown('**📱 Identificação do arquivo**')
+        with st.container(border=True):
+            st.write('Ticker(s) no CSV: **'+', '.join(sr['tickers_declarados'])+'**')
+            st.caption('Fonte declarada: '+sr['fonte_declarada'])
+            st.caption('Fuso: '+sr['fuso_declarado'])
+            st.caption('SHA-256: '+sr['sha256'][:24]+'… (identidade dos bytes, NÃO origem comprovada)')
+        st.markdown('**Preços originais × ajustados**')
+        if sr['precos_ajustados_presentes']:
+            st.info('O arquivo contém séries ORIGINAIS e AJUSTADAS. Elas são mantidas em colunas distintas, sem somar preços de uma série com a outra.')
+            st.write(f"Ajuste observado entre abertura ajustada e original: **{sr['ajuste_minimo_observado']:+.0f} a {sr['ajuste_maximo_observado']:+.0f} pontos**. Isso é uma diferença encontrada no arquivo, não uma rolagem verificada.")
+            if sr['registros_com_inconsistencia_entre_ajuste_e_preco']:
+                st.warning(f"{sr['registros_com_inconsistencia_entre_ajuste_e_preco']} inconsistência(s) na relação declarada entre preços originais e ajustados; verificar antes de qualquer estudo.")
+        else:
+            st.caption('Este arquivo não contém as quatro colunas de preços ajustados.')
+        if sr['linhas_apos_vencimento_nominal']:
+            st.warning(f"{sr['linhas_apos_vencimento_nominal']} linha(s) após o vencimento nominal declarado; não certificadas.")
+        st.error('🛑 0 dias certificados. BACKTEST E ORDENS BLOQUEADOS neste laboratório; ticker presente no CSV não é autenticação independente.')
+        st.markdown('**📆 Diagnóstico dos dias**')
+        for day in source_m1_daily.head(8).to_dict('records'):
+            with st.container(border=True):
+                st.markdown('**'+day['dia']+' · '+day['contrato_declarado']+'**')
+                st.write(f"{day['candles_m1']} candles M1 · {day['saltos_de_tempo']} lacuna(s) interna(s)")
+                st.caption('Primeiro: '+day['primeiro_minuto'][11:16]+' · Último: '+day['ultimo_minuto'][11:16])
+                st.caption('Vencimento nominal: '+day['vencimento_nominal']+' (não certifica o ticker)')
+        st.download_button('⬇️ Baixar laudo da fonte (JSON)',
+            json.dumps(sr,ensure_ascii=False,indent=2).encode('utf-8'),
+            'laudo_fonte_win_v15.json','application/json',use_container_width=True)
+        st.download_button('⬇️ Baixar qualidade M1 por dia (CSV)',
+            source_m1_daily.to_csv(index=False).encode('utf-8-sig'),
+            'qualidade_fonte_win_v15.csv','text/csv',use_container_width=True)
+        st.download_button('⬇️ Baixar lacunas M1 (CSV)',
+            source_m1_gaps.to_csv(index=False).encode('utf-8-sig'),
+            'lacunas_fonte_win_v15.csv','text/csv',use_container_width=True)
+        st.download_button('⬇️ Baixar M5 apenas janelas completas (CSV)',
+            source_m1_m5.to_csv(index=False).encode('utf-8-sig'),
+            'm5_exploratorio_com_ticker_v15.csv','text/csv',use_container_width=True)
+        st.caption('A conversão descarta janelas incompletas. Não corrige lacunas, horários oficiais nem documentação de origem. O CSV convertido permanece NÃO autenticado.')
+
 st.divider()
-st.caption('Trader Pro AI Elite · v1.4 · Simulador de pesquisa. Horários de referência B3 para 2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')
+st.caption('Trader Pro AI Elite · v1.5 · Simulador de pesquisa. Horários de referência B3 para 2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')
