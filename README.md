@@ -1,65 +1,67 @@
-# ◈ Trader Pro AI Elite v0.9 — pesquisa premium, celular primeiro
+# ◈ Trader Pro AI Elite v1.0 — laboratório de histórico WIN
 
-**Aplicação Streamlit responsiva para pesquisa histórica do mini-índice WIN**. Motor de regras determinísticas para candles de 5 minutos e confirmação de 15 minutos. **Não é uma IA treinada**, não acessa cotações ao vivo, não se conecta a corretoras, não envia ordens reais, não produz probabilidades comprovadas e não oferece qualquer garantia de rentabilidade. Demonstrações usam preços **totalmente fictícios**.
+**Visual premium, celular primeiro.** Aplicação Streamlit para estudar, de maneira crítica, sinais e backtests exploratórios do mini-índice WIN usando candles de **5 minutos**. Sem compra/venda real, sem conexão com corretoras, sem feed ao vivo, sem IA treinada e sem promessa de acerto. **Demonstração fictícia NÃO é evidência de mercado.**
 
-## 📱 Atualização pelo celular: GitHub + Streamlit Cloud
+## 📱 Instalar a atualização no Android (mesmo GitHub + Streamlit Cloud)
 
-1. Baixe `Trader_Pro_AI_Elite_v0_9_GitHub.zip` e **extraia o ZIP** com o gerenciador de arquivos do Android.
-2. Abra o **mesmo repositório** GitHub já conectado ao Streamlit Cloud. Na raiz, use **Add file → Upload files** (ou o menu equivalente no navegador) para enviar os **12 arquivos extraídos**, substituindo os nomes iguais. **Não envie somente o ZIP sem extrair.**
-3. A lista é: `app.py`, `engine.py`, `backtest.py`, `audit.py`, `research.py`, `validation.py`, `requirements.txt`, `test_engine.py`, `test_backtest.py`, `test_research.py`, `test_validation.py`, `README.md`.
-4. Confirme em **Commit changes**. O arquivo de entrada da implantação permanece **`app.py`**. Em geral, o Streamlit Cloud atualiza automaticamente o aplicativo publicado no mesmo repositório/branch.
-5. Abra o seu link Streamlit já existente e verifique no cabeçalho **RESEARCH TERMINAL · V0.9**. Não é preciso instalar Python, pagar Replit nem criar novo repositório para esse fluxo.
-6. Abra **🔐 Dados** e execute **🛡️ Executar autoteste de feriados** (10 verificações previstas). Em seguida, abra **🧬 Robustez** e toque em **Calcular diagnóstico de robustez** para testar a demonstração fictícia.
+1. Baixe `Trader_Pro_AI_Elite_v1_0_GitHub.zip` e **extraia** no gerenciador de arquivos.
+2. Abra o **mesmo repositório** do GitHub conectado ao Streamlit Community Cloud.
+3. Escolha **Add file → Upload files** e selecione os **14 arquivos extraídos**, não o ZIP. Substitua os mesmos nomes da versão anterior e adicione `provenance.py` e `test_provenance.py`.
+4. Confirme **Commit changes** na branch `main`. A execução continua apontando para **`app.py`**; o aplicativo existente normalmente atualiza após o commit.
+5. Abra o link já existente no Streamlit. O cabeçalho deve indicar **RESEARCH TERMINAL · V1.0**.
+6. Na tela inicial, escolha **Demonstração fictícia** ou **CSV histórico · origem declarada**. Se não tiver um CSV legítimo, permaneça na demonstração identificada.
+7. Em **🔐 Dados**, execute o autoteste de calendário. Em **🧬 Robustez**, clique em calcular diagnóstico e confira a **proporção efetiva** de pregões reservados.
 
-> Os 32 testes unitários de código passaram no ambiente de desenvolvimento, mas o funcionamento da implantação web deve ser conferido no seu dispositivo depois do commit.
+**Não precisa instalar Python ou pagar Replit.** Os testes de código foram feitos pelo desenvolvimento; o resultado visual final depende da implantação no seu Streamlit Cloud.
 
-## O que muda na v0.9
+## O que mudou na v1.0
 
-- **Visual mobile refinado**: margem superior ampliada para reduzir a sobreposição com a barra fixa do Streamlit, melhor espaçamento nos botões e **cartões verticais** de leitura das metades históricas e da reserva cronológica. Algumas tabelas técnicas detalhadas ainda exigem rolagem horizontal.
-- **Separação cronológica fixa de 70%/30% dos pregões completos**: estatísticas líquidas para a parte inicial e a reserva final. A divisão preserva cada sessão inteira, não mistura dados de datas e reutiliza somente as operações produzidas pelo mesmo motor com regras fixas.
-- **Diagnóstico de evidência**: status explícito `SIMULAÇÃO — SEM EVIDÊNCIA DE MERCADO` para demonstrações e `EVIDÊNCIA INSUFICIENTE — SOMENTE PESQUISA` para CSVs de origem apenas declarada. Alertas se há menos de 30 pregões no total, 10 na reserva ou 100 operações na reserva, se a reserva não teve operações/saldo positivo ou se perde saldo sob custo adicional.
-- **Sensibilidade adicional**: reavalia o saldo da **reserva cronológica** subtraindo mais **10 pontos por operação**, sem alterar preços, stops ou condições de entrada. Os custos normais da simulação já estavam incorporados.
-- **Auditoria do backtest**: passa a mostrar uma visão textual de quantos sinais foram bloqueados por regras, limites de risco, horário ou posições em aberto. As explicações detalhadas de candle e o CSV de decisões já existiam no motor; foram preservados.
-- **Autoteste B3 expandido para 10 cenários**: inclui agora **09/07/2026, pregão normal**, e **31/12/2026, sem pregão**, além dos oito cenários anteriores.
-- **Preservação de lógica v0.8**: o motor EMA/RSI/ATR, grade mínima de 5 pontos, entradas na abertura do candle seguinte, precaução com stop/alvo no mesmo candle, slippage adverso, limites de perda, horário e calendário foram mantidos. **Nenhum parâmetro de sinal foi otimizado para maquiar o resultado anterior da demonstração.**
+- **Importação histórica visível na tela principal**: formulário com CSV, fonte declarada, contrato específico (como `WINZ26`) e confirmação explícita de que não é arquivo fictício.
+- **Triagem mais rigorosa**: tick de **5 pontos**, OHLC, datas duplicadas, candles exatamente de 5 minutos, cada sessão **completa**, nenhuma lacuna dentro da sessão, **nenhum pregão inteiro omitido** entre as datas inicial/final, datas futuras rejeitadas, ticker do arquivo verificado quando houver coluna, feriados bloqueados.
+- **Registros de origem**: relatório baixável JSON com identidade SHA-256 dos bytes, período, fornecedor **declarado**, contrato e ressalvas. Hash **não prova cotações autênticas**.
+- **Calendário WIN 2026**: bloqueio obrigatório de fins de semana e feriados sem pregão, abertura especial em **18/02/2026 às 13h**, vencimentos em 2026 e último candle do contrato vencendo corrigido conforme as grades vigentes (até outubro `16:55`, a partir de novembro `17:55`). Em vencimento o motor **não abre novas operações**; não valida anos além de 2026.
+- **Divisão cronológica mais clara**: mostra a proporção de reserva **efetiva**, e não só o alvo de 30%; por exemplo, 2 de 4 pregões = **50%** por arredondamento. Sem otimização automática nem alegação de teste cego.
+- **Leitura mobile premium** e tentativa de ocultar controles flutuantes do Streamlit dentro da página. A barra de gerenciamento do Streamlit Cloud fora do app pode continuar visível. Tabelas técnicas ainda podem exigir arrastar.
+- **41 testes automatizados aprovados** em ambiente local; incluem nove testes novos de integração do CSV, lacunas, datas futuras, declarações, vencimentos e arredondamento da reserva.
 
-## Advertência importante sobre “fora da amostra”
+## ⚠️ Como conseguir dados históricos legítimos
 
-A v0.9 cria uma **reserva cronológica retrospectiva**, não um teste prospectivo cego. Se os dados já foram vistos, ou as regras foram alteradas após olhar a reserva, aquela janela NÃO é independente. Um teste verdadeiramente prospectivo exige congelar as regras antes de coletar **dados futuros nunca examinados**; mesmo isso não garante performance real. Sem fonte autenticada e execução testada, **não negociar dinheiro real**.
+A v1.0 **não fornece** dados intradiários autênticos, porque não recebeu um arquivo ou feed licenciado de mercado. Obtenha um CSV OHLC de **WIN 5 minutos** numa plataforma/fornecedor habilitado a disponibilizar históricos. Verifique termos de uso, custos e qualidade com o fornecedor. A página pública da B3 de *cotações históricas do mercado à vista* refere-se a outro conjunto de dados: ela **não é** um CSV pronto de candles WIN intradiários.
 
-## Formato de importação
+Formato aceito, com cabeçalho e 1 linha por candle de abertura no horário de Brasília:
 
-CSV: `datetime,open,high,low,close[,volume]`, candles de **5 minutos**, timestamp de **abertura** em horário de Brasília, preços do contrato WIN na **grade de 5 pontos**, horários válidos, sem duplicatas, lacunas ou candles incompletos para o backtest. No app, é necessário declarar fonte, contrato específico (ex.: `WINZ26`) e confirmar a procedência. Não use uma série contínua como se fosse o mesmo contrato até o vencimento.
+```csv
+datetime,open,high,low,close,volume,symbol
+```
 
-O SHA-256 do arquivo registra apenas sua identidade digital, **não comprova autenticidade das cotações**. Um CSV de operações não pode ser usado como CSV de candles.
+`volume` e `symbol` são opcionais; use `symbol` sempre que possível para conferência. Não invente preços, não use **WIN contínuo** como se fosse contrato específico e não misture meses/vencimentos. O conteúdo precisa incluir todas as barras de **cada pregão inteiro**. Para períodos que cruzam contratos, exporte um contrato por vez. O app rejeita CSVs com dias úteis de pregão omitidos entre começo e fim. **Somente 2026** está coberto pelo calendário que foi codificado; outros anos são bloqueados até revisão das grades.
 
-## Feriados e segurança B3 — somente 2026
+Os dados enviados pelo navegador são processados no ambiente de hospedagem do Streamlit Cloud; evite carregar conteúdo confidencial se não tiver autorização. A confirmação de fonte é declaração do operador, **não autenticação independente da B3**.
 
-No validador de candles, no motor de elegibilidade e no backtest, permanecem bloqueados fins de semana e datas de 2026 sem negociação do WIN, como `2026-11-20`, `2026-12-24`, `2026-12-25` e `2026-12-31`. A Quarta-feira de Cinzas (`2026-02-18`) tem início especial às **13h**. O feriado estadual de São Paulo em **09/07/2026 tem pregão normal**, conforme a B3. No vencimento do contrato específico, o modelo proíbe novas entradas. **Outros anos são rejeitados** até que os respectivos calendários oficiais sejam validados e codificados; mudanças extraordinárias são uma limitação operacional e devem ser checadas na fonte oficial.
+## Regras, limitações e auditoria
 
-Fontes oficiais da B3:
+- As regras de sinal são EMA 9/21, RSI 14, ATR 14 e tendência de 15 min calculada apenas após fechamento. Filtros seletivos são **hipóteses**; o nome comercial **AI** não significa IA treinada.
+- Backtest: abertura do candle seguinte, um trade de cada vez, stop prioritário quando stop e alvo caem no mesmo candle, slippage adverso e custos estimados, limites diários e de risco.
+- Preços de toque intrabar, fila de execução, spreads reais, delays, slippage real, custos e ajustes continuam desconhecidos com OHLC 5m. Qualquer backtest é aproximado.
+- Divisão temporal 70/30 é **retrospectiva**. Se as regras ou dados foram observados antes da separação, não houve verdadeiro teste cego. Uma reserva positiva, mesmo longa, não autoriza operar com dinheiro real.
+- A triagem não verifica se uma plataforma reportou todas as suspensões extraordinárias; consulte sempre comunicados oficiais B3. Calendarização automática de outros anos, conexões a corretoras e qualquer emissão de ordens seguem **desativadas**.
+- **NUNCA** trate um arquivo fictício rotulado como “histórico declarado” como evidência: o software valida sua estrutura, não sua verdade externa.
 
-- Calendário anual 2026: https://www.b3.com.br/pt_br/noticias/calendario-de-negociacao-da-b3-confira-o-funcionamento-da-bolsa-em-2026.htm
-- Carnaval e horário especial: https://www.b3.com.br/pt_br/noticias/confira-o-funcionamento-da-b3-no-carnaval.htm
-- Feriado 20/11/2026: https://b3.com.br/pt_br/noticias/confira-o-funcionamento-da-b3-no-feriado-do-dia-nacional-de-zumbi-e-da-consciencia-negra.htm
-- Horário de derivativos: https://www.b3.com.br/pt_br/solucoes/plataformas/puma-trading-system/para-participantes-e-traders/horario-de-negociacao/derivativos/indices/
+### Fontes oficiais consultadas
 
-## Testar no computador (opcional)
+- Calendário B3 2026 e Quarta-feira de Cinzas: https://www.b3.com.br/pt_br/noticias/calendario-de-negociacao-da-b3-confira-o-funcionamento-da-bolsa-em-2026.htm
+- Vencimentos WIN: https://b3.com.br/pt_br/solucoes/plataformas/puma-trading-system/para-participantes-e-traders/calendario-de-negociacao/vencimentos/calendario-de-vencimentos-de-contratos-financeiros/
+- Grade horária a partir de 09/03/2026 — OC 005/2026-PRE: https://www.b3.com.br/data/files/E3/B2/C2/12/BC09C910F37907C9AC094EA8/OC%20005-2026%20PRE%20NOVOS%20HORARIOS%20DE%20NEGOCIACAO_PT.pdf
+- Grade horária a partir de 03/11/2026 — OC 050/2026-VNC: https://www.b3.com.br/data/files/99/B7/82/67/8A631A103BBB511AAC094EA8/OC%20050-2026-VNC%20NOVOS%20HORARIOS%20DE%20NEGOCIACAO_PT.pdf
+- Características e tick do WIN: https://www.b3.com.br/pt_br/produtos-e-servicos/negociacao/renda-variavel/futuro-mini-de-ibovespa.htm
+
+## Rodar testes localmente (opcional)
 
 ```bash
 pip install -r requirements.txt
 pip install pytest
-python -m pytest -q
+pytest -q
 streamlit run app.py
 ```
 
-**32 testes unitários passaram em 22/11/2026.** Eles cobrem regras, processamento de candles, calendário, backtest, custos, auditoria, robustez e avaliação cronológica. Não demonstram taxa de acerto real. `pytest` não precisa constar nas dependências do Streamlit Cloud.
-
-## Limitações
-
-- Não há IA treinada, nem recomendação ou execução de ordens.
-- A demonstração é fictícia; é inválido inferir precisão futura de seus resultados.
-- Backtest usa OHLC 5m; sequência de toques dentro do candle e liquidez são desconhecidas. Slippage e taxas são aproximações.
-- Holdout cronológico é retrospectivo, sem ajuste automático de regras; não prova teste cego.
-- CSV de origem declarada não significa fonte verificada.
-- O calendário está restrito ao ano de 2026; mudanças especiais posteriores não são checadas em tempo real.
+Resultado no desenvolvimento da v1.0: **41 testes passaram**. O sistema continua exclusivamente de pesquisa, com ordens desabilitadas.

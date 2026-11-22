@@ -1,7 +1,7 @@
-"""Trader Pro AI Elite v0.8: motor de OHLC do WIN preservado da v0.7, sem ordens reais.
+"""Trader Pro AI Elite v1.0: motor de pesquisa do WIN, sem ordens reais.
 
 A validação da grade de preço e dos horários é deliberadamente estrita.
-Horários-base são os da B3 para 2026-11; feriados de 2026 são conferidos,
+Horários-base B3 são verificados para 2026; feriados de 2026 são conferidos,
 mas outros anos, vencimentos e leilões precisam de calendário oficial.
 """
 from datetime import datetime, time
@@ -44,13 +44,18 @@ def contract_expiry(contract):
 
 
 def session_bounds(day, contract=None):
-    """Grade normal 2026; no vencimento do contrato, seu pregão acaba às 17h.
+    """Candles 5m conservadores da sessão WIN em 2026.
 
-    Esta implementação NÃO conhece todas as exceções/calls. Por segurança,
-    somente os dias de 2026 são aceitos pelo validador.
+    Nos vencimentos até outubro a grade 005/2026-PRE encerrava às 17h;
+    em novembro/dezembro a grade 050/2026-VNC passa a encerrar às 18h.
+    Os valores retornados são a abertura do último candle completo.
+    Calendários extraordinários e anos diferentes continuam não autorizados.
     """
     start = SPECIAL_OPEN_2026.get(day, SESSION_START)
-    end = time(16, 55) if contract and day == contract_expiry(contract) else LAST_OPEN
+    if contract and day == contract_expiry(contract):
+        end = time(17, 55) if day >= pd.Timestamp("2026-11-03").date() else time(16, 55)
+    else:
+        end = LAST_OPEN
     return start, end
 
 

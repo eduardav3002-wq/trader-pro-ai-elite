@@ -1,4 +1,4 @@
-"""Trader Pro AI Elite v0.9 — verificação cronológica descritiva e evidências.
+"""Trader Pro AI Elite v1.0 — verificação cronológica descritiva e evidências.
 
 Nenhum conjunto aqui é considerado comprovadamente cego ou independente: o código
 não acompanha a história de escolhas humanas de parâmetros nem autentica CSVs.
@@ -95,6 +95,9 @@ def chronological_validation(
         else 'EVIDÊNCIA INSUFICIENTE — SOMENTE PESQUISA'
     )
     period_rows = []
+    effective_fraction = reserve_count / len(days)
+    if abs(effective_fraction - reserve_fraction) > 0.05:
+        messages.append(f'Reserva pretendida {reserve_fraction:.0%}; proporção efetiva {effective_fraction:.0%} por arredondamento de pregões inteiros.')
     for name, d, s in [('Estudo inicial', study_days, study_summary),
                        ('Reserva cronológica', reserve_days, reserve_summary)]:
         period_rows.append({
@@ -120,6 +123,8 @@ def chronological_validation(
     return {
         'classificacao': decision,
         'frac_reserva': reserve_fraction,
+        'frac_reserva_efetiva': effective_fraction,
+        'pregoes_total': len(days),
         'pregoes_estudo': len(study_days),
         'pregoes_reserva': reserve_count,
         'estudo': study_summary,
