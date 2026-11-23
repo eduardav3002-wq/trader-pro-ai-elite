@@ -23,8 +23,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-
-      - uses: android-actions/setup-android@v3
+          
+      - name: Usar Android SDK instalado
+        run: echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
 
       - name: Instalar Android SDK
         run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
