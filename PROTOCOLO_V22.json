@@ -1,0 +1,49 @@
+{
+  "aplicativo": "Trader Pro AI Elite",
+  "versao": "2.2",
+  "data_congelamento": "2026-11-23",
+  "finalidade": "Pesquisa fora da amostra em WINZ26; proibido trading real",
+  "status": "Sem pregões novos completos no pacote; nenhuma performance futura medida",
+  "contrato": "WINZ26",
+  "aquecimento": "2026-11-10 a 2026-11-19 (8 pregões M5)",
+  "primeiro_pregao_candidato": "2026-11-23",
+  "restricoes_entrada": [
+    "somente candles completos de pregões consecutivos de 2026",
+    "mesmo ticker WINZ26 explícito em todas as linhas",
+    "feriados B3 e datas do calendário não validado bloqueados",
+    "timestamps de abertura de candle 5m em Brasília",
+    "source e hash declaratórios não autenticam preço"
+  ],
+  "parametros": {
+    "perfil": "seletivo",
+    "limites_risco_pts": [
+      125,
+      175,
+      250,
+      500
+    ],
+    "custo_pontos_por_operacao": 2.0,
+    "slippage_ticks_por_lado": [
+      1,
+      2,
+      3
+    ],
+    "max_trades_dia": 3,
+    "max_hold_candles": 12,
+    "max_loss_diaria_realizada_pts": 200,
+    "pausar_apos_perdas_consecutivas": 2,
+    "rr_minimo": 1.0
+  },
+  "anti_vies": [
+    "não otimizar baseado no período futuro",
+    "não selecionar melhor limite após observar resultado",
+    "não contar trades anteriores à data de início da avaliação",
+    "não completar candles ausentes com valores sintéticos"
+  ],
+  "indicadores": "EMA9/21, RSI14, ATR14, tendência 15min fechada",
+  "nao_certifica": [
+    "proveniência real B3",
+    "qualidade de execução real",
+    "rentabilidade futura"
+  ]
+}

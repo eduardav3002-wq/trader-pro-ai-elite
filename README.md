@@ -1,3 +1,36 @@
+# Trader Pro AI Elite v2.2 — Avaliação futura auditável e teste de estresse
+
+**Objetivo:** analisar apenas pregões inéditos do WINZ26 sem ajustar parâmetros aos resultados novos. O app é ferramenta de pesquisa e não envia ordens. Não possui IA treinada, integração com corretoras ou garantia de retorno.
+
+**Verificação técnica da entrega:** `python -m pytest -q` — 169 testes aprovados, 1 ignorado (interface Streamlit real não verificada neste ambiente).
+
+## Novidades da v2.2
+
+- Na fonte **Amostra pública B3 · WINZ26**, abra **Backtest → 🔬 Validação futura + estresse · v2.2**.
+- A data do primeiro pregão posterior a 19/11/2026 é **23/11/2026**, pois 20/11 foi feriado e 21–22/11 foram fim de semana. O CSV deve conter pregões completos, fechados e consecutivos, sem pular dias negociados.
+- O CSV deve ser UTF-8 e conter `datetime,open,high,low,close,contrato` (ou `symbol`, `ticker`, `ativo` ou `contract`), com o mesmo ticker `WINZ26` em todas as linhas. `volume` opcional. Datas são aberturas de candles M5 em Brasília; dados fictícios não são permitidos para validação financeira.
+- O aquecimento continua usando os oito pregões de 10 a 19/11. **Nenhuma operação dessa amostra é somada ao resultado dos pregões novos.**
+- A comparação **na amostra já conhecida** mostra agora o estresse com 1, 2 e 3 ticks por lado, para identificar sensibilidade antes de receber pregões novos. Não é validação futura.
+- Cenários congelados para risco por operação de **125, 175, 250 e 500 pts**, taxa fixa de **2 pts por operação completa**, slippage base de **1 tick (5 pts) por lado** e limites da v2.0.
+- Teste de estresse reexecuta a estratégia com **1, 2 ou 3 ticks de slippage por lado**. Como risco e razão ganho/perda mudam, o número de operações também pode mudar. O cenário não é mera subtração de pontos após os trades.
+- Tela com resumo, lucro/prejuízo por dia (inclusive dias sem operações), operações detalhadas e cinco downloads: 4 CSVs e um recibo JSON com hash SHA-256 de entrada, datas, fonte **declarada** e parâmetros imutáveis.
+- Se forem importados menos de 20 pregões inéditos, o app avisa que a amostra é curta. Mesmo com mais pregões, nenhuma validação independente de origem nem desempenho futuro é presumida.
+
+### Fluxo pelo celular (Android/GitHub)
+
+1. **Extraia** `Trader_Pro_AI_Elite_v2_2_GitHub.zip`.
+2. Envie os arquivos extraídos à raiz do repositório GitHub que já hospeda o app. Substitua arquivos de mesmo nome; **não envie apenas o ZIP**.
+3. Confirme o commit na branch ligada ao Streamlit Cloud e atualize o aplicativo. A identidade deve exibir `RESEARCH TERMINAL · V2.2`.
+4. Em **📁 Escolha como analisar**, toque em **Amostra pública B3 · WINZ26**; depois abra **Backtest** e a seção **🔬 Validação futura + estresse · v2.2**.
+5. Se ainda não possuir CSV de pregões posteriores completos, não invente dados; continue testando a amostra interna ou a interface. O app não baixa dados B3 sozinho.
+6. Depois de obter CSV com acesso autorizado, exporte os cinco arquivos de auditoria. O recibo permite identificar o arquivo exato e os parâmetros usados, mas **não autentica a fonte**.
+
+### Limitações metodológicas
+
+Os quatro limites já foram analisados nos oito pregões anteriores: portanto, o conjunto não é prova independente de otimização. A comparação futura continua exploratória e deve ser interpretada com cautela contra seleção do melhor resultado, custos, risco intrabar, gaps, mudanças de regime e possível inadequação dos horários. Não operar dinheiro real com base nesta pesquisa. O bloqueio de feriados B3 de 2026, fins de semana e anos fora do calendário validado permanece obrigatório.
+
+---
+
 # Trader Pro AI Elite v2.1
 
 Na amostra pública B3, abra **Backtest → Validar em pregões novos**.

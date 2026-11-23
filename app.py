@@ -8,7 +8,8 @@ import streamlit as st
 
 from audit import audit_trades
 from backtest import backtest
-from risk_comparison import compare_risk_limits, evaluate_later_sessions
+from risk_comparison import compare_risk_limits
+from forward_validation import evaluate_forward, sample_stress
 from research import robustness_report
 from validation import chronological_validation
 from provenance import inspect_historical_csv
@@ -88,7 +89,7 @@ def render_differences_v18(summary, fields, ranges, events, key_prefix):
     st.error('🛑 Diagnóstico exploratório: 0 dias certificados, SEM BACKTEST e SEM ORDENS REAIS.')
 
 
-st.set_page_config(page_title='Trader Pro AI Elite · v2.1',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
+st.set_page_config(page_title='Trader Pro AI Elite · v2.2',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
 st.markdown("""<style>
 :root {color-scheme:dark}
 .stApp{background:radial-gradient(ellipse at 100% 0%,#1f173f 0%,#0c1020 35%,#080c16 72%);color:#edf1ff}
@@ -135,11 +136,11 @@ section[data-testid="stSidebar"]{background:#11162a}
 }
 </style>""",unsafe_allow_html=True)
 
-st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V2.1</div>
+st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V2.2</div>
 <div class="hero-title">◈ TRADER PRO AI ELITE</div>
 <div class="hero-sub">WIN · Intraday · Filtros EMA 9/21, RSI 14, ATR 14 e tendência 15m</div>
 <span class="pill">● PESQUISA SEGURA · ORDENS DESATIVADAS</span></div>''',unsafe_allow_html=True)
-st.caption('v2.1 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
+st.caption('v2.2 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
 st.markdown('### 📁 Escolha como analisar')
 source = st.radio('Fonte dos candles', ['Demonstração fictícia', 'CSV histórico 2026 · origem declarada', 'Amostra pública B3 · WINZ26', '🔬 Explorar 2019–2020 · SEM backtest', '🧾 Conferir CSV com ticker · SEM backtest'], index=0, horizontal=False, label_visibility='collapsed')
 st.caption('Demonstração = fictícia. Históricos = auditoria de origem declarada. O novo modo com ticker é apenas inspeção, SEM sinais ou backtest.')
@@ -637,36 +638,57 @@ with tab_bt:
             st.subheader('Limites de risco na amostra exploratória')
             st.caption('Cenários fixos: 2 pts de taxa por operação, 5 pts de slippage por lado, até 3 operações por dia, 12 candles por operação e pausa após 2 perdas seguidas. Limite de perda realizada de 200 pts por dia e risco-retorno mínimo de 1.')
             st.dataframe(compare_risk_limits(checked, contract), hide_index=True, use_container_width=True)
+            st.markdown('**🧪 Sensibilidade a slippage na MESMA amostra**')
+            st.caption('Comparação em 8 pregões já observados, não é previsão ou avaliação fora da amostra. Cada mudança de slippage recalcula filtros de risco, entradas e saídas.')
+            st.dataframe(sample_stress(checked, contract), hide_index=True, use_container_width=True)
 
         if source == 'Amostra pública B3 · WINZ26':
-            with st.expander('Validar em pregões novos'):
-                st.caption('Carregue candles M5 contínuos do WINZ26 posteriores a 19/11/2026. Os oito pregões incluídos aquecem os indicadores. O resultado conta apenas as novas operações.')
+            with st.expander('🔬 Validação futura + estresse · v2.2'):
+                st.caption('Envie apenas pregões COMPLETOS, consecutivos e posteriores a 19/11/2026 do mesmo contrato WINZ26. O primeiro pregão esperado é 23/11/2026. Sem candles novos, não há resultado fora da amostra.')
+                st.caption('Quatro limites de risco fixos (125, 175, 250, 500 pts). Perfil seletivo, taxa 2 pts/ordem completa, slippage base 1 tick POR LADO, até 3 operações/dia, 12 candles, pausa com 2 perdas e limite realizado de 200 pts/dia.')
                 with st.form('later_sessions'):
-                    validation_csv = st.file_uploader('CSV M5 de pregões novos', type=['csv'])
-                    validation_source = st.text_input('Fonte dos pregões novos', value='B3 · Boletim Diário do Mercado')
-                    validate_later = st.form_submit_button('Comparar nos pregões novos')
+                    validation_csv = st.file_uploader('CSV M5 de pregões novos (com coluna contrato ou symbol)', type=['csv'])
+                    validation_source = st.text_input('Fonte declarada dos pregões novos', value='B3 · Boletim Diário do Mercado')
+                    validate_later = st.form_submit_button('🛡️ Auditar e comparar pregões novos')
                 if validate_later:
+                    st.session_state.pop('later_v22_result', None)
                     if validation_csv is None:
-                        st.info('Carregue o CSV dos pregões novos.')
+                        st.info('Carregue o CSV de pregões novos. Os dados não são gerados automaticamente.')
                     else:
                         try:
-                            results, receipt = evaluate_later_sessions(
+                            st.session_state['later_v22_result'] = evaluate_forward(
                                 checked, validation_csv.getvalue(), validation_source,
                                 contract, validation_csv.name,
                             )
-                            st.session_state['later_risk_result'] = (results, receipt)
                         except (ValueError, TypeError) as exc:
-                            st.session_state.pop('later_risk_result', None)
-                            st.error(str(exc))
-                    if validation_csv is None:
-                        st.session_state.pop('later_risk_result', None)
-                if 'later_risk_result' in st.session_state:
-                    results, receipt = st.session_state['later_risk_result']
-                    st.caption(f"{receipt['nome_arquivo']} · {receipt['pregoes_completos']} pregão(ões) · fonte declarada")
-                    st.caption('Perfil Seletivo. Custos e travas iguais à comparação fixa da amostra exploratória.')
-                    st.dataframe(results, hide_index=True, use_container_width=True)
-                    st.download_button('Baixar validação (CSV)', results.to_csv(index=False).encode('utf-8-sig'),
-                                       'validacao_pregoes_novos_v21.csv', 'text/csv')
+                            st.error('Validação bloqueada: ' + str(exc))
+                if 'later_v22_result' in st.session_state:
+                    report = st.session_state['later_v22_result']
+                    receipt = report['recibo']
+                    st.warning('RESULTADO EXPLORATÓRIO · Origem não confirmada independentemente. Sem sinais para operar dinheiro real.')
+                    st.caption(f"{receipt['arquivo']} · {receipt['pregoes_avaliados']} pregão(ões) inéditos · {receipt['candles_avaliados']} candles · {receipt['contrato']}")
+                    if receipt['pregoes_avaliados'] < 20:
+                        st.info('Amostra futura curta (menos de 20 pregões): estatísticas extremamente instáveis. Não concluir superioridade ou consistência.')
+                    st.markdown('**Resultados SOMENTE de operações novas**')
+                    st.dataframe(report['resumo'], hide_index=True, use_container_width=True)
+                    st.markdown('**Custos e slippage: 1, 2 ou 3 ticks POR LADO**')
+                    st.caption('Cada cenário é reexecutado do zero; com mais slippage, algumas entradas podem ser barradas pelo risco/RR, alterando a quantidade de operações.')
+                    st.dataframe(report['estresse'], hide_index=True, use_container_width=True)
+                    st.markdown('**Resultados de todos os pregões (inclusive zero operações)**')
+                    st.dataframe(report['por_dia'], hide_index=True, use_container_width=True)
+                    st.markdown('**Operações individuais: cenário base**')
+                    st.dataframe(report['operacoes'], hide_index=True, use_container_width=True)
+                    st.download_button('⬇️ Resumo v2.2 (CSV)', report['resumo'].to_csv(index=False).encode('utf-8-sig'),
+                                       'avaliacao_futura_resumo_v22.csv', 'text/csv', key='later_v22_summary')
+                    st.download_button('⬇️ Estresse por slippage (CSV)', report['estresse'].to_csv(index=False).encode('utf-8-sig'),
+                                       'avaliacao_futura_estresse_v22.csv', 'text/csv', key='later_v22_stress')
+                    st.download_button('⬇️ Resultado por pregão (CSV)', report['por_dia'].to_csv(index=False).encode('utf-8-sig'),
+                                       'avaliacao_futura_por_dia_v22.csv', 'text/csv', key='later_v22_daily')
+                    st.download_button('⬇️ Operações individuais (CSV)', report['operacoes'].to_csv(index=False).encode('utf-8-sig'),
+                                       'avaliacao_futura_operacoes_v22.csv', 'text/csv', key='later_v22_trades')
+                    st.download_button('⬇️ Recibo de origem e parâmetros (JSON)',
+                                       json.dumps(receipt, ensure_ascii=False, indent=2).encode('utf-8'),
+                                       'avaliacao_futura_recibo_v22.json', 'application/json', key='later_v22_receipt')
         if compare:
             try:
                 raw_data=demo_data() if source=='Demonstração fictícia' else checked
@@ -1164,4 +1186,4 @@ with tab_source:
                 st.error(f'Autoteste rejeitado: {exc}')
 
 st.divider()
-st.caption('Trader Pro AI Elite · v2.1 · Simulador de pesquisa. Horários de referência B3 para 2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')
+st.caption('Trader Pro AI Elite · v2.2 · Simulador de pesquisa. Horários de referência B3 para 2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')
