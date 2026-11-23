@@ -1,5 +1,6 @@
 """Trader Pro AI Elite v1.8 — diagnóstico de divergências, sem ordens."""
 import json
+from pathlib import Path
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -86,7 +87,7 @@ def render_differences_v18(summary, fields, ranges, events, key_prefix):
     st.error('🛑 Diagnóstico exploratório: 0 dias certificados, SEM BACKTEST e SEM ORDENS REAIS.')
 
 
-st.set_page_config(page_title='Trader Pro AI Elite · v1.8',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
+st.set_page_config(page_title='Trader Pro AI Elite · v1.9',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
 st.markdown("""<style>
 :root {color-scheme:dark}
 .stApp{background:radial-gradient(ellipse at 100% 0%,#1f173f 0%,#0c1020 35%,#080c16 72%);color:#edf1ff}
@@ -133,13 +134,13 @@ section[data-testid="stSidebar"]{background:#11162a}
 }
 </style>""",unsafe_allow_html=True)
 
-st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V1.8</div>
+st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V1.9</div>
 <div class="hero-title">◈ TRADER PRO AI ELITE</div>
 <div class="hero-sub">WIN · Intraday · Filtros EMA 9/21, RSI 14, ATR 14 e tendência 15m</div>
 <span class="pill">● PESQUISA SEGURA · ORDENS DESATIVADAS</span></div>''',unsafe_allow_html=True)
-st.caption('v1.8 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
+st.caption('v1.9 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
 st.markdown('### 📁 Escolha como analisar')
-source = st.radio('Fonte dos candles', ['Demonstração fictícia', 'CSV histórico 2026 · origem declarada', '🔬 Explorar 2019–2020 · SEM backtest', '🧾 Conferir CSV com ticker · SEM backtest'], index=0, horizontal=False, label_visibility='collapsed')
+source = st.radio('Fonte dos candles', ['Demonstração fictícia', 'CSV histórico 2026 · origem declarada', 'Amostra pública B3 · WINZ26', '🔬 Explorar 2019–2020 · SEM backtest', '🧾 Conferir CSV com ticker · SEM backtest'], index=0, horizontal=False, label_visibility='collapsed')
 st.caption('Demonstração = fictícia. Históricos = auditoria de origem declarada. O novo modo com ticker é apenas inspeção, SEM sinais ou backtest.')
 with st.sidebar:
     st.header('⚙️ Central de controle')
@@ -168,7 +169,19 @@ cross_report=None
 cross_daily=None
 cross_events=None
 cross_m5=None
-if source.startswith('CSV histórico'):
+if source == 'Amostra pública B3 · WINZ26':
+    st.subheader('WINZ26 · B3 · 10 a 12 de novembro de 2026')
+    st.caption('339 candles de 5 minutos da janela do motor. A abertura de 11 e 12/11 usa o primeiro negócio registrado às 09:02.')
+    contract = 'WINZ26'
+    sample_path = Path(__file__).with_name('WINZ26_B3_2026-11-10_a_12_M5.csv')
+    try:
+        checked, provenance = inspect_historical_csv(
+            sample_path.read_bytes(), 'B3 · Boletim Diário do Mercado', contract, sample_path.name)
+        provenance['classificacao'] = 'AMOSTRA_PUBLICA_B3_CONFERIDA_COM_BOLETIM'
+        out = analyze(checked, contract=contract, profile=profile)
+    except (OSError, ValueError) as exc:
+        st.error(f'Amostra pública indisponível: {exc}')
+elif source.startswith('CSV histórico'):
     st.subheader('📁 Importação histórica — dados fornecidos pelo usuário')
     st.info('Obtenha o CSV de uma plataforma/fornecedor que tenha direito de fornecer WIN intraday. O app não busca dados da B3 automaticamente e não pode verificar a origem externa.')
     uploaded=st.file_uploader('Carregue o CSV de candles do WIN (não o CSV de operações)',
@@ -605,7 +618,7 @@ with tab_bt:
             max_hold=st.number_input('Duração máxima (candles de 5 min)',min_value=1,max_value=100,value=12,step=1)
             daily_loss=st.number_input('Limite de perda diária realizada (pontos)',min_value=0.0,value=200.0,step=25.0)
             st.caption(f'Hipótese: {cost:.1f} pts de taxas + {2*slip*5} pts de slippage por operação.')
-        enable_risk=st.checkbox('Ativar travas extras v1.1 (experimentais)',value=profile=='seletivo')
+        enable_risk=st.checkbox('Ativar travas extras v1.1 (experimentais)',value=profile=='seletivo' or source == 'Amostra pública B3 · WINZ26')
         if enable_risk:
             r1,r2,r3=st.columns(3)
             max_risk=r1.number_input('Risco máximo do stop (pts)',min_value=5.0,value=125.0,step=5.0)
@@ -669,7 +682,7 @@ with tab_bt:
                     with st.expander('Ver tabela completa das operações'):
                         st.dataframe(trades,use_container_width=True,hide_index=True)
                 st.subheader('Auditoria das entradas')
-                st.caption('Esta tabela mostra por que cada sinal do motor foi executado ou bloqueado no backtest.')
+                st.caption('A tabela detalhada mostra a decisão, o limite configurado e o risco estimado quando a tentativa chegou à avaliação do stop.')
                 if attempts.empty:
                     st.info('Nenhum sinal de entrada foi gerado nesta amostra.')
                 else:
@@ -724,7 +737,7 @@ with tab_robust:
                     max_consecutive_losses=int(loss_streak) if loss_streak is not None else None,
                     min_reward_risk=float(min_rr))
                 report=robustness_report(diagnostic_trades,out,additional_costs=(0,5,10,20))
-                st.caption('Dados: ' + ('FICTÍCIOS (DEMONSTRAÇÃO)' if source=='Demonstração fictícia' else 'CSV HISTÓRICO DECLARADO, NÃO AUTENTICADO'))
+                st.caption('Dados: ' + ('FICTÍCIOS (DEMONSTRAÇÃO)' if source=='Demonstração fictícia' else ('AMOSTRA PÚBLICA B3' if source == 'Amostra pública B3 · WINZ26' else 'CSV HISTÓRICO DECLARADO, NÃO AUTENTICADO')))
                 summary=report['resumo']
                 k1,k2=st.columns(2)
                 k1.metric('Operações simuladas',summary['operacoes'])
@@ -1110,4 +1123,4 @@ with tab_source:
                 st.error(f'Autoteste rejeitado: {exc}')
 
 st.divider()
-st.caption('Trader Pro AI Elite · v1.8 · Simulador de pesquisa. Horários de referência B3 para 2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')
+st.caption('Trader Pro AI Elite · v1.9 · Simulador de pesquisa. Horários de referência B3 para 2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')

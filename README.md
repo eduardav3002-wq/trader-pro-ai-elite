@@ -1,3 +1,19 @@
+# Trader Pro AI Elite v1.9
+
+- Envie os arquivos do ZIP extraído à raiz do repositório do Streamlit.
+- Em **Escolha como analisar**, selecione **Amostra pública B3 · WINZ26**.
+- Na aba de backtest, execute o perfil selecionado ou compare os dois perfis sob os mesmos controles. Em **Detalhar cada tentativa**, veja o risco do stop, o limite e a relação risco-retorno quando calculados.
+
+## Amostra pública incluída
+
+339 candles M5 do WINZ26 entre 10 e 12/11/2026, obtidos a partir dos negócios individuais da B3. O primeiro negócio de 11 e 12/11 ocorreu às 09:02. A janela rotulada 09:00 usa os negócios reais de 09:02 a 09:04, sem preencher minutos sem registros. A amostra cobre as janelas de 09:00 a 18:20, inclusive. Os totais e OHLC da sessão foram conferidos com o boletim oficial antes do recorte. Uma segunda fonte minuto a minuto segue pendente.
+
+SHA-256 do CSV incluído: `e041daa2387731fb86046538a5367f613f0830cf61fb5592b82c038900b0dd42`.
+
+[Boletim Diário da B3](https://arquivos.b3.com.br/bdi/tabelas?lang=pt-br)
+
+## Histórico da versão anterior
+
 # ◈ Trader Pro AI Elite v1.8 — Diagnóstico detalhado de divergências
 
 **WIN intraday · Streamlit mobile-first · sem ordens reais · sem backtest validado neste laboratório**

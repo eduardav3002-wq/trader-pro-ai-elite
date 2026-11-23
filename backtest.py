@@ -51,6 +51,7 @@ def backtest(data, cost_points=2.0, max_hold=12, slippage_ticks=1, max_daily_tra
     records=[]
     daily = {}
     decisions = {}
+    risk_checks = {}
     i = 34
     while i < len(df):
         direction = df.at[i,'signal']
@@ -88,6 +89,7 @@ def backtest(data, cost_points=2.0, max_hold=12, slippage_ticks=1, max_daily_tra
         risk_points=round(side*(entry-stop)+slippage_ticks*TICK+cost_points,2)
         potential_gain=round(side*(target-entry)-slippage_ticks*TICK-cost_points,2)
         rr=(potential_gain/risk_points) if risk_points>0 else 0.0
+        risk_checks[i] = (risk_points, round(rr, 3))
         if max_trade_risk_points is not None and risk_points>max_trade_risk_points:
             decisions[i]='RISCO_OPERACAO_EXCEDIDO'; i+=1;continue
         if rr<min_reward_risk:
@@ -148,9 +150,13 @@ def backtest(data, cost_points=2.0, max_hold=12, slippage_ticks=1, max_daily_tra
         return trades
     audit_rows=[]
     for idx in df.index[df.signal.isin(('COMPRA','VENDA'))]:
+        risk_points, reward_risk = risk_checks.get(idx, (None, None))
         audit_rows.append({'sinal_candle':int(idx),
                            'sinal_data':str(df.at[idx,'datetime']),
                            'direcao':str(df.at[idx,'signal']),
                            'decisao':decisions.get(int(idx),'SEM_CANDLE_SEGUINTE'),
+                           'risco_stop_estimado_pts':risk_points,
+                           'limite_risco_pts':max_trade_risk_points,
+                           'rr_teorico':reward_risk,
                            'janela_entrada':df.at[idx,'entry_gate_code'] if 'entry_gate_code' in df else signal_entry_gate(df.at[idx,'signal'],df.at[idx,'datetime'],df.at[idx+1,'datetime'] if idx+1<len(df) else None,contract)})
-    return trades,pd.DataFrame(audit_rows,columns=('sinal_candle','sinal_data','direcao','decisao','janela_entrada'))
+    return trades,pd.DataFrame(audit_rows,columns=('sinal_candle','sinal_data','direcao','decisao','janela_entrada','risco_stop_estimado_pts','limite_risco_pts','rr_teorico'))
