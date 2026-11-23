@@ -1,3 +1,12 @@
+# Trader Pro AI Elite v2.1
+
+Na amostra pública B3, abra **Backtest → Validar em pregões novos**.
+Envie um CSV M5 do WINZ26 com colunas datetime, contrato, open, high, low, close e volume opcional. O horário é o de abertura do candle em Brasília. Envie pregões completos e consecutivos começando pelo próximo pregão após 19/11/2026. Feriados e fins de semana seguem o calendário do motor.
+
+Os oito pregões incluídos são o histórico inicial dos indicadores. Operações, saldo líquido e rebaixamento máximo da validação consideram somente entradas nos pregões novos. Os quatro limites e os demais parâmetros são compartilhados com a comparação fixa da v2.0. O CSV carregado tem fonte declarada e passa pela validação estrutural do motor.
+
+## Histórico da v2.0
+
 # Trader Pro AI Elite v2.0
 
 Extraia o ZIP e envie os arquivos à raiz do repositório do Streamlit.
