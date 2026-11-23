@@ -16,7 +16,8 @@ COLUMNS = ('sinal_candle','entrada_candle','saida_candle','direcao','entrada','s
 def backtest(data, cost_points=2.0, max_hold=12, slippage_ticks=1, max_daily_trades=3,
              max_daily_loss_points=200.0, contract=None,
              max_trade_risk_points=None, max_consecutive_losses=None,
-             min_reward_risk=0.0, return_audit=False):
+             min_reward_risk=0.0, return_audit=False,
+             enforce_pretrade_daily_budget=False):
     """O custo informado equivale a pontos por operação completa, ADICIONAL ao slippage.
 
     1 tick = 5 pontos. Slippage simétrico adverso em entrada e saída.
@@ -35,6 +36,8 @@ def backtest(data, cost_points=2.0, max_hold=12, slippage_ticks=1, max_daily_tra
         raise ValueError('Limite de perdas consecutivas deve ser inteiro positivo.')
     if not isinstance(return_audit, bool):
         raise ValueError('return_audit inválido.')
+    if not isinstance(enforce_pretrade_daily_budget, bool):
+        raise ValueError('enforce_pretrade_daily_budget deve ser booleano.')
     if not (isinstance(slippage_ticks,int) and not isinstance(slippage_ticks,bool) and slippage_ticks >= 0):
         raise ValueError('Slippage em ticks deve ser um inteiro não negativo.')
     if not (isinstance(max_hold,int) and not isinstance(max_hold,bool) and max_hold >= 1
@@ -52,6 +55,7 @@ def backtest(data, cost_points=2.0, max_hold=12, slippage_ticks=1, max_daily_tra
     daily = {}
     decisions = {}
     risk_checks = {}
+    daily_budget_checks = {}
     i = 34
     while i < len(df):
         direction = df.at[i,'signal']
@@ -94,6 +98,13 @@ def backtest(data, cost_points=2.0, max_hold=12, slippage_ticks=1, max_daily_tra
             decisions[i]='RISCO_OPERACAO_EXCEDIDO'; i+=1;continue
         if rr<min_reward_risk:
             decisions[i]='RR_INSUFICIENTE'; i+=1;continue
+        # V2.5: modo experimental e opt-in. O saldo positivo do dia NAO amplia
+        # o orçamento de risco; perdas liquidas realizadas reduzem o saldo disponível.
+        # A projeção de risco é apenas do stop simulado, NÃO é perda garantida.
+        daily_budget = round(max(0.0, max_daily_loss_points + min(0.0, d['net'])), 2)
+        daily_budget_checks[i] = daily_budget
+        if enforce_pretrade_daily_budget and risk_points > daily_budget + 1e-9:
+            decisions[i]='ORCAMENTO_DIARIO_INSUFICIENTE'; i+=1;continue
         # A entrada só existe no próximo candle; nunca atravessa outro pregão.
         end_i=entry_i
         while end_i+1 < len(df) and end_i-entry_i+1 < max_hold:
@@ -158,5 +169,8 @@ def backtest(data, cost_points=2.0, max_hold=12, slippage_ticks=1, max_daily_tra
                            'risco_stop_estimado_pts':risk_points,
                            'limite_risco_pts':max_trade_risk_points,
                            'rr_teorico':reward_risk,
+                           'orcamento_restante_antes_entrada_pts': daily_budget_checks.get(int(idx)),
+                           'trava_orcamento_preentrada_ativa': enforce_pretrade_daily_budget,
                            'janela_entrada':df.at[idx,'entry_gate_code'] if 'entry_gate_code' in df else signal_entry_gate(df.at[idx,'signal'],df.at[idx,'datetime'],df.at[idx+1,'datetime'] if idx+1<len(df) else None,contract)})
-    return trades,pd.DataFrame(audit_rows,columns=('sinal_candle','sinal_data','direcao','decisao','janela_entrada','risco_stop_estimado_pts','limite_risco_pts','rr_teorico'))
+    return trades,pd.DataFrame(audit_rows,columns=('sinal_candle','sinal_data','direcao','decisao','janela_entrada','risco_stop_estimado_pts','limite_risco_pts','rr_teorico',
+                            'orcamento_restante_antes_entrada_pts','trava_orcamento_preentrada_ativa'))

@@ -12,6 +12,7 @@ from risk_comparison import compare_risk_limits
 from forward_validation import evaluate_forward, sample_stress
 from execution_audit import audit_slippage_scenarios
 from fragility_lab import analyze_fragility
+from daily_budget_v25 import compare_daily_budget, compare_guarded_future
 from research import robustness_report
 from validation import chronological_validation
 from provenance import inspect_historical_csv
@@ -91,7 +92,7 @@ def render_differences_v18(summary, fields, ranges, events, key_prefix):
     st.error('🛑 Diagnóstico exploratório: 0 dias certificados, SEM BACKTEST e SEM ORDENS REAIS.')
 
 
-st.set_page_config(page_title='Trader Pro AI Elite · v2.4',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
+st.set_page_config(page_title='Trader Pro AI Elite · v2.5',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
 st.markdown("""<style>
 :root {color-scheme:dark}
 .stApp{background:radial-gradient(ellipse at 100% 0%,#1f173f 0%,#0c1020 35%,#080c16 72%);color:#edf1ff}
@@ -138,11 +139,11 @@ section[data-testid="stSidebar"]{background:#11162a}
 }
 </style>""",unsafe_allow_html=True)
 
-st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V2.4.1</div>
+st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V2.5</div>
 <div class="hero-title">◈ TRADER PRO AI ELITE</div>
 <div class="hero-sub">WIN · Intraday · Filtros EMA 9/21, RSI 14, ATR 14 e tendência 15m</div>
 <span class="pill">● PESQUISA SEGURA · ORDENS DESATIVADAS</span></div>''',unsafe_allow_html=True)
-st.caption('v2.4.1 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
+st.caption('v2.5 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
 st.markdown('### 📁 Escolha como analisar')
 source = st.radio('Fonte dos candles', ['Demonstração fictícia', 'CSV histórico 2026 · origem declarada', 'Amostra pública B3 · WINZ26', '🔬 Explorar 2019–2020 · SEM backtest', '🧾 Conferir CSV com ticker · SEM backtest'], index=0, horizontal=False, label_visibility='collapsed')
 st.caption('Demonstração = fictícia. Históricos = auditoria de origem declarada. O novo modo com ticker é apenas inspeção, SEM sinais ou backtest.')
@@ -713,6 +714,45 @@ with tab_bt:
                         fragile['por_dia'].to_csv(index=False).encode('utf-8-sig'),
                         'resultados_por_dia_v24.csv','text/csv',use_container_width=True,key='v24_daily')
 
+
+        if source == 'Amostra pública B3 · WINZ26':
+            with st.expander('🛡️ Orçamento de risco antes da entrada · v2.5', expanded=True):
+                st.caption('NOVA SIMULAÇÃO SEPARADA: risco estimado de stop deve caber no orçamento de perda diária restante. Nenhum ganho do dia aumenta esse orçamento. Nunca é garantia de perda máxima.')
+                st.warning('Não confundir com o protocolo futuro congelado v2.2. A v2.5 foi criada APÓS a leitura da amostra histórica; seus resultados nesses 8 pregões são exploratórios e sujeitos a viés de seleção.')
+                if st.button('🧪 Testar proteção pré-entrada · v2.5', use_container_width=True, key='run_budget_v25'):
+                    try:
+                        st.session_state['sample_v25_budget'] = compare_daily_budget(checked, contract)
+                    except (ValueError, TypeError, AssertionError) as exc:
+                        st.session_state.pop('sample_v25_budget', None)
+                        st.error('Teste v2.5 bloqueado: ' + str(exc))
+                if 'sample_v25_budget' not in st.session_state:
+                    st.info('Toque no botão acima para comparar o motor legado com a nova trava, sem alterar os resultados v2.2.')
+                else:
+                    budget25 = st.session_state['sample_v25_budget']
+                    st.markdown('**Legado × protegido (12 cenários em cada modo)**')
+                    st.dataframe(budget25['resumo'], hide_index=True, use_container_width=True)
+                    st.markdown('**Sinais recusados por orçamento diário insuficiente**')
+                    if budget25['bloqueios'].empty:
+                        st.info('Nenhum sinal bloqueado pela nova regra nesta amostra.')
+                    else:
+                        st.dataframe(budget25['bloqueios'], hide_index=True, use_container_width=True)
+                    st.markdown('**Conferência por pregão, inclusive dias sem operação**')
+                    st.dataframe(budget25['por_dia'], hide_index=True, use_container_width=True)
+                    st.warning('Uma operação já aberta pode perder mais que 200 pts por gap, slippage maior, liquidez ou falha de stop. A trava apenas decide se pode ENTRAR segundo uma projeção.')
+                    for tag, name, data25 in (
+                        ('resumo', '⬇️ Resultado da proteção (CSV)', budget25['resumo']),
+                        ('bloqueios', '⬇️ Bloqueios do orçamento (CSV)', budget25['bloqueios']),
+                        ('por_dia', '⬇️ Resultado diário comparado (CSV)', budget25['por_dia']),
+                        ('operacoes', '⬇️ Operações de ambos os modos (CSV)', budget25['operacoes']),
+                    ):
+                        st.download_button(name, data25.to_csv(index=False).encode('utf-8-sig'),
+                            'orcamento_v25_' + tag + '.csv', 'text/csv',
+                            use_container_width=True, key='v25_dl_' + tag)
+                    st.download_button('⬇️ Protocolo de pesquisa v2.5 (JSON)',
+                        json.dumps(budget25['protocolo'], ensure_ascii=False, indent=2).encode('utf-8'),
+                        'protocolo_orcamento_v25.json','application/json',
+                        use_container_width=True, key='v25_dl_protocol')
+
         if source == 'Amostra pública B3 · WINZ26':
             with st.expander('🔬 Validação futura + estresse · v2.2'):
                 st.caption('Envie apenas pregões COMPLETOS, consecutivos e posteriores a 19/11/2026 do mesmo contrato WINZ26. O primeiro pregão esperado é 23/11/2026. Sem candles novos, não há resultado fora da amostra.')
@@ -760,6 +800,26 @@ with tab_bt:
                     st.download_button('⬇️ Recibo de origem e parâmetros (JSON)',
                                        json.dumps(receipt, ensure_ascii=False, indent=2).encode('utf-8'),
                                        'avaliacao_futura_recibo_v22.json', 'application/json', key='later_v22_receipt')
+                    st.markdown('**🛡️ Comparação adicional com trava v2.5 em pregões novos**')
+                    st.caption('Não substitui o resultado principal pré-registrado v2.2. O protocolo v2.5 foi definido depois de observar a amostra original e deve ser julgado prospectivamente.')
+                    if st.button('Calcular estudo adicional v2.5 (dados novos)', key='later_guard_v25', use_container_width=True):
+                        if validation_csv is None or receipt['sha256_csv_avaliacao'] != __import__('hashlib').sha256(validation_csv.getvalue()).hexdigest():
+                            st.warning('Selecione novamente o MESMO arquivo CSV da validação original antes de comparar.')
+                        else:
+                            try:
+                                st.session_state['later_v25_guard'] = compare_guarded_future(
+                                    checked, validation_csv.getvalue(), validation_source, contract, validation_csv.name)
+                            except (ValueError, TypeError, AssertionError) as exc:
+                                st.session_state.pop('later_v25_guard', None)
+                                st.error('Estudo adicional bloqueado: ' + str(exc))
+                    if 'later_v25_guard' in st.session_state:
+                        extra25 = st.session_state['later_v25_guard']
+                        if extra25['protocolo']['recibo_validacao_v22']['sha256_csv_avaliacao'] == receipt['sha256_csv_avaliacao']:
+                            st.dataframe(extra25['resumo'], hide_index=True, use_container_width=True)
+                            st.download_button('⬇️ Pesquisa futura protegida v2.5 (CSV)',
+                                extra25['resumo'].to_csv(index=False).encode('utf-8-sig'),
+                                'pesquisa_futura_protegida_v25.csv','text/csv',key='later_v25_csv')
+
         if compare:
             try:
                 raw_data=demo_data() if source=='Demonstração fictícia' else checked
