@@ -1,0 +1,57 @@
+
+name: Gerar APK Android v2.8 DEMO
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'Trader_Pro_AI_Elite_v2_8_Android.zip'
+      - '.github/workflows/android_overlay_v28.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Instalar Android SDK
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Extrair projeto Android
+        run: |
+          mkdir -p "$RUNNER_TEMP/trader-android-v28"
+          unzip -q Trader_Pro_AI_Elite_v2_8_Android.zip -d "$RUNNER_TEMP/trader-android-v28"
+
+      - name: Testar alertas simulados
+        run: |
+          cd "$RUNNER_TEMP/trader-android-v28"
+          mkdir -p /tmp/trader-policy
+          javac -encoding UTF-8 -d /tmp/trader-policy app/src/main/java/com/traderproaielite/overlaydemo/DemoSignal.java app/src/main/java/com/traderproaielite/overlaydemo/DemoPolicy.java tests/DemoPolicyTest.java
+          java -cp /tmp/trader-policy DemoPolicyTest
+
+      - name: Compilar APK
+        run: |
+          cd "$RUNNER_TEMP/trader-android-v28"
+          gradle --no-daemon --stacktrace :app:assembleDebug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Trader-Pro-AI-Elite-Android-v2.8-DEMO
+          path: ${{ runner.temp }}/trader-android-v28/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
