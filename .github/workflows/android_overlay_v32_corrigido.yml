@@ -1,0 +1,75 @@
+name: Gerar APK Android v3.2 CORRIGIDO DEMO
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'Trader_Pro_AI_Elite_v3_2_Android_CORRIGIDO.zip'
+      - '.github/workflows/android_overlay_v32_corrigido.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: SDK Android preinstalado
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          TOOL="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$TOOL"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          "$TOOL" --sdk_root="$SDK" --install 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Extrair Android v3.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/trader-android-v32"
+          unzip -q Trader_Pro_AI_Elite_v3_2_Android_CORRIGIDO.zip -d "$RUNNER_TEMP/trader-android-v32"
+          test -f "$RUNNER_TEMP/trader-android-v32/app/build.gradle"
+      - name: Testar regras dos alertas, transporte e confiabilidade
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/trader-android-v32"
+          mkdir -p /tmp/trader-v32-policy
+          javac -encoding UTF-8 -d /tmp/trader-v32-policy \
+            app/src/main/java/com/traderproaielite/overlaydemo/DemoSignal.java \
+            app/src/main/java/com/traderproaielite/overlaydemo/DemoPolicy.java \
+            app/src/main/java/com/traderproaielite/overlaydemo/OverlayVisibilityPolicy.java \
+            app/src/main/java/com/traderproaielite/overlaydemo/OverlayDisplayMode.java \
+            app/src/main/java/com/traderproaielite/overlaydemo/DemoBridgePolicy.java \
+            app/src/main/java/com/traderproaielite/overlaydemo/BridgeReliability.java \
+            tests/DemoPolicyTest.java \
+            tests/OverlayVisibilityPolicyTest.java \
+            tests/OverlayDisplayModeTest.java \
+            tests/DemoBridgePolicyTest.java \
+            tests/BridgeReliabilityTest.java
+          for test in DemoPolicyTest OverlayVisibilityPolicyTest OverlayDisplayModeTest DemoBridgePolicyTest BridgeReliabilityTest; do
+            java -cp /tmp/trader-v32-policy "$test"
+          done
+      - name: Compilar APK v3.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/trader-android-v32"
+          gradle --no-daemon --stacktrace :app:assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Trader-Pro-AI-Elite-Android-v3.2-CORRIGIDO-DEMO
+          path: ${{ runner.temp }}/trader-android-v32/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
