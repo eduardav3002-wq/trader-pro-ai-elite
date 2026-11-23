@@ -1,14 +1,11 @@
-# Trader Pro AI Elite v1.9
+# Trader Pro AI Elite v2.0
 
-- Envie os arquivos do ZIP extraído à raiz do repositório do Streamlit.
-- Em **Escolha como analisar**, selecione **Amostra pública B3 · WINZ26**.
-- Na aba de backtest, execute o perfil selecionado ou compare os dois perfis sob os mesmos controles. Em **Detalhar cada tentativa**, veja o risco do stop, o limite e a relação risco-retorno quando calculados.
+Extraia o ZIP e envie os arquivos à raiz do repositório do Streamlit.
+No app, selecione **Amostra pública B3 · WINZ26** e abra **Backtest → Comparar limites de risco · Seletivo**.
 
-## Amostra pública incluída
+A amostra exploratória contém oito pregões (10, 11, 12, 13, 16, 17, 18 e 19/11/2026) e 904 candles M5 de abertura das 09:00 às 18:20. Os preços e totais da sessão, antes do recorte, foram comparados com o consolidado diário da B3. Nos dias 11 e 12, os negócios registrados de 09:02 a 09:04 formam o candle rotulado 09:00.
 
-339 candles M5 do WINZ26 entre 10 e 12/11/2026, obtidos a partir dos negócios individuais da B3. O primeiro negócio de 11 e 12/11 ocorreu às 09:02. A janela rotulada 09:00 usa os negócios reais de 09:02 a 09:04, sem preencher minutos sem registros. A amostra cobre as janelas de 09:00 a 18:20, inclusive. Os totais e OHLC da sessão foram conferidos com o boletim oficial antes do recorte. Uma segunda fonte minuto a minuto segue pendente.
-
-SHA-256 do CSV incluído: `e041daa2387731fb86046538a5367f613f0830cf61fb5592b82c038900b0dd42`.
+A comparação fixa testa 125, 175, 250 e 500 pontos por operação. O padrão do backtest individual segue em 125 pontos. Os resultados desta amostra são exploratórios. Pregões posteriores serão necessários para avaliar os mesmos cenários fora da amostra.
 
 [Boletim Diário da B3](https://arquivos.b3.com.br/bdi/tabelas?lang=pt-br)
 

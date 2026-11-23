@@ -8,6 +8,7 @@ import streamlit as st
 
 from audit import audit_trades
 from backtest import backtest
+from risk_comparison import compare_risk_limits
 from research import robustness_report
 from validation import chronological_validation
 from provenance import inspect_historical_csv
@@ -87,7 +88,7 @@ def render_differences_v18(summary, fields, ranges, events, key_prefix):
     st.error('🛑 Diagnóstico exploratório: 0 dias certificados, SEM BACKTEST e SEM ORDENS REAIS.')
 
 
-st.set_page_config(page_title='Trader Pro AI Elite · v1.9',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
+st.set_page_config(page_title='Trader Pro AI Elite · v2.0',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
 st.markdown("""<style>
 :root {color-scheme:dark}
 .stApp{background:radial-gradient(ellipse at 100% 0%,#1f173f 0%,#0c1020 35%,#080c16 72%);color:#edf1ff}
@@ -134,11 +135,11 @@ section[data-testid="stSidebar"]{background:#11162a}
 }
 </style>""",unsafe_allow_html=True)
 
-st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V1.9</div>
+st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V2.0</div>
 <div class="hero-title">◈ TRADER PRO AI ELITE</div>
 <div class="hero-sub">WIN · Intraday · Filtros EMA 9/21, RSI 14, ATR 14 e tendência 15m</div>
 <span class="pill">● PESQUISA SEGURA · ORDENS DESATIVADAS</span></div>''',unsafe_allow_html=True)
-st.caption('v1.9 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
+st.caption('v2.0 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
 st.markdown('### 📁 Escolha como analisar')
 source = st.radio('Fonte dos candles', ['Demonstração fictícia', 'CSV histórico 2026 · origem declarada', 'Amostra pública B3 · WINZ26', '🔬 Explorar 2019–2020 · SEM backtest', '🧾 Conferir CSV com ticker · SEM backtest'], index=0, horizontal=False, label_visibility='collapsed')
 st.caption('Demonstração = fictícia. Históricos = auditoria de origem declarada. O novo modo com ticker é apenas inspeção, SEM sinais ou backtest.')
@@ -170,10 +171,10 @@ cross_daily=None
 cross_events=None
 cross_m5=None
 if source == 'Amostra pública B3 · WINZ26':
-    st.subheader('WINZ26 · B3 · 10 a 12 de novembro de 2026')
-    st.caption('339 candles de 5 minutos da janela do motor. A abertura de 11 e 12/11 usa o primeiro negócio registrado às 09:02.')
+    st.subheader('WINZ26 · B3 · 10 a 19 de novembro de 2026')
+    st.caption('Amostra exploratória de oito pregões e 904 candles de 5 minutos. A abertura de 11 e 12/11 usa o primeiro negócio registrado às 09:02.')
     contract = 'WINZ26'
-    sample_path = Path(__file__).with_name('WINZ26_B3_2026-11-10_a_12_M5.csv')
+    sample_path = Path(__file__).with_name('WINZ26_B3_2026-11-10_a_19_M5.csv')
     try:
         checked, provenance = inspect_historical_csv(
             sample_path.read_bytes(), 'B3 · Boletim Diário do Mercado', contract, sample_path.name)
@@ -629,8 +630,14 @@ with tab_bt:
             max_risk=None
             loss_streak=None
             min_rr=0.0
-        run=st.button('Executar backtest v1.1',type='primary',use_container_width=True)
+        run=st.button('Executar backtest',type='primary',use_container_width=True)
         compare=st.button('Comparar base v0.5 × seletivo v1.1 (mesmos parâmetros)',use_container_width=True)
+        if source == 'Amostra pública B3 · WINZ26' and st.button(
+                'Comparar limites de risco · Seletivo', use_container_width=True):
+            st.subheader('Limites de risco na amostra exploratória')
+            st.caption('Cenários fixos: 2 pts de taxa por operação, 5 pts de slippage por lado, até 3 operações por dia, 12 candles por operação e pausa após 2 perdas seguidas. Limite de perda realizada de 200 pts por dia e risco-retorno mínimo de 1.')
+            st.dataframe(compare_risk_limits(checked, contract), hide_index=True, use_container_width=True)
+            st.caption('A avaliação em pregões posteriores começa quando os novos dados estiverem disponíveis.')
         if compare:
             try:
                 raw_data=demo_data() if source=='Demonstração fictícia' else checked
@@ -648,7 +655,12 @@ with tab_bt:
                         'Operações':int(len(comp_trades)),'Saldo (pts)':round(float(comp_trades.net_points.sum()),2)})
                 st.subheader('Comparação sob os mesmos controles')
                 st.dataframe(pd.DataFrame(comparisons),hide_index=True,use_container_width=True)
-                st.warning('Comparação retrospectiva. Na demonstração, preços inventados: não é evidência de maior acerto.')
+                if source == 'Demonstração fictícia':
+                    st.warning('Demonstração com preços fictícios.')
+                elif source == 'Amostra pública B3 · WINZ26':
+                    st.caption('Comparação exploratória com negócios públicos da B3.')
+                else:
+                    st.caption('Comparação retrospectiva com o histórico fornecido.')
             except (ValueError,TypeError,pd.errors.ParserError) as exc:
                 st.error(f'Não foi possível comparar: {exc}')
         if run:
@@ -1123,4 +1135,4 @@ with tab_source:
                 st.error(f'Autoteste rejeitado: {exc}')
 
 st.divider()
-st.caption('Trader Pro AI Elite · v1.9 · Simulador de pesquisa. Horários de referência B3 para 2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')
+st.caption('Trader Pro AI Elite · v2.0 · Simulador de pesquisa. Horários de referência B3 para 2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')
