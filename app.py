@@ -1,4 +1,4 @@
-"""Trader Pro AI Elite v1.8 — diagnóstico de divergências, sem ordens."""
+"""Trader Pro AI Elite v2.6 — terminal de pesquisa offline, sem ordens reais."""
 import json
 from pathlib import Path
 
@@ -13,6 +13,7 @@ from forward_validation import evaluate_forward, sample_stress
 from execution_audit import audit_slippage_scenarios
 from fragility_lab import analyze_fragility
 from daily_budget_v25 import compare_daily_budget, compare_guarded_future
+from forward_lab_v26 import evaluate_prospective_v26, BASELINE_SHA256
 from research import robustness_report
 from validation import chronological_validation
 from provenance import inspect_historical_csv
@@ -92,7 +93,7 @@ def render_differences_v18(summary, fields, ranges, events, key_prefix):
     st.error('🛑 Diagnóstico exploratório: 0 dias certificados, SEM BACKTEST e SEM ORDENS REAIS.')
 
 
-st.set_page_config(page_title='Trader Pro AI Elite · v2.5',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
+st.set_page_config(page_title='Trader Pro AI Elite · v2.6',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
 st.markdown("""<style>
 :root {color-scheme:dark}
 .stApp{background:radial-gradient(ellipse at 100% 0%,#1f173f 0%,#0c1020 35%,#080c16 72%);color:#edf1ff}
@@ -139,11 +140,11 @@ section[data-testid="stSidebar"]{background:#11162a}
 }
 </style>""",unsafe_allow_html=True)
 
-st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V2.5</div>
+st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V2.6</div>
 <div class="hero-title">◈ TRADER PRO AI ELITE</div>
 <div class="hero-sub">WIN · Intraday · Filtros EMA 9/21, RSI 14, ATR 14 e tendência 15m</div>
 <span class="pill">● PESQUISA SEGURA · ORDENS DESATIVADAS</span></div>''',unsafe_allow_html=True)
-st.caption('v2.5 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
+st.caption('v2.6 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
 st.markdown('### 📁 Escolha como analisar')
 source = st.radio('Fonte dos candles', ['Demonstração fictícia', 'CSV histórico 2026 · origem declarada', 'Amostra pública B3 · WINZ26', '🔬 Explorar 2019–2020 · SEM backtest', '🧾 Conferir CSV com ticker · SEM backtest'], index=0, horizontal=False, label_visibility='collapsed')
 st.caption('Demonstração = fictícia. Históricos = auditoria de origem declarada. O novo modo com ticker é apenas inspeção, SEM sinais ou backtest.')
@@ -819,6 +820,63 @@ with tab_bt:
                             st.download_button('⬇️ Pesquisa futura protegida v2.5 (CSV)',
                                 extra25['resumo'].to_csv(index=False).encode('utf-8-sig'),
                                 'pesquisa_futura_protegida_v25.csv','text/csv',key='later_v25_csv')
+
+
+        if source == 'Amostra pública B3 · WINZ26':
+            with st.expander('🧭 Validação prospectiva dupla · v2.6', expanded=True):
+                st.info('Primeiro pregão elegível: 23/11/2026. O feriado da B3 de 20/11 é bloqueado. Precisamos de pregões completos e consecutivos, nunca de candles inventados.')
+                st.caption('v2.2 = protocolo original congelado. v2.5 = hipótese adicional de orçamento diário, definida depois de analisar os oito pregões iniciais. Ambos usam os mesmos dados novos; nenhum parâmetro será otimizado.')
+                with st.form('forward_v26_form'):
+                    new_csv26 = st.file_uploader('CSV M5 de pregões novos · WINZ26 (ticker explícito)', type=['csv'], key='new_csv26')
+                    provider26 = st.text_input('Fonte dos dados (declarada, não autenticada)', value='B3 · Boletim Diário do Mercado', key='new_source26')
+                    submit26 = st.form_submit_button('🔬 Validar dois protocolos sem otimização', use_container_width=True)
+                if submit26:
+                    st.session_state.pop('forward_v26_result', None)
+                    st.session_state.pop('forward_v26_upload_hash', None)
+                    if new_csv26 is None:
+                        st.info('Envie um arquivo CSV de pregões completos e posteriores ao histórico; nenhum dado é gerado automaticamente.')
+                    else:
+                        try:
+                            candidate26 = evaluate_prospective_v26(
+                                checked, new_csv26.getvalue(), provider26, new_csv26.name)
+                            st.session_state['forward_v26_result'] = candidate26
+                            st.session_state['forward_v26_upload_hash'] = __import__('hashlib').sha256(new_csv26.getvalue()).hexdigest()
+                        except (ValueError, TypeError, AssertionError) as exc:
+                            st.error('CSV NÃO ACEITO para validação: ' + str(exc))
+                result26 = st.session_state.get('forward_v26_result')
+                current_hash26 = (__import__('hashlib').sha256(new_csv26.getvalue()).hexdigest()
+                                  if new_csv26 is not None else None)
+                if result26 is None or st.session_state.get('forward_v26_upload_hash') != current_hash26:
+                    st.caption('Sem resultado validado nesta sessão. Uma alteração de arquivo exige nova auditoria.')
+                elif result26['recibo']['fonte_declarada'] != provider26.strip():
+                    st.warning('A descrição da fonte foi alterada; confirme-a executando a auditoria novamente.')
+                else:
+                    receipt26 = result26['recibo']
+                    st.warning('ORIGEM NÃO CERTIFICADA · Simulações em pontos, NÃO desempenho de conta real. Não realizar ordens.')
+                    st.caption(f"{receipt26['qtd_pregoes_novos']} pregão(ões) novos · {receipt26['candles_novos']} candles · início {receipt26['datas_novas'][0]} · SHA-256: {receipt26['sha256_csv_novos'][:16]}…")
+                    if receipt26['qtd_pregoes_novos'] < 20:
+                        st.warning('Menos de 20 pregões novos: amostra curta. Não concluir eficácia nem selecionar limites de risco.')
+                    st.markdown('**Comparação pareada v2.2 original × v2.5 protegido**')
+                    st.dataframe(result26['comparativo'], hide_index=True, use_container_width=True)
+                    st.markdown('**Conciliação por pregão — incluindo dias sem operações**')
+                    st.dataframe(result26['por_dia'], hide_index=True, use_container_width=True)
+                    st.markdown('**Sinais impedidos pelo orçamento pré-entrada**')
+                    st.dataframe(result26['bloqueios'], hide_index=True, use_container_width=True)
+                    for part, label26 in (
+                        ('comparativo', 'Comparação dos protocolos'),
+                        ('resumo_completo', 'Todos os cenários'),
+                        ('por_dia', 'Resultados por pregão'),
+                        ('bloqueios', 'Bloqueios de risco'),
+                        ('operacoes', 'Operações auditadas'),
+                    ):
+                        st.download_button('⬇️ ' + label26 + ' (CSV)',
+                            result26[part].to_csv(index=False).encode('utf-8-sig'),
+                            'v26_' + part + '.csv', 'text/csv', use_container_width=True,
+                            key='v26_download_' + part)
+                    st.download_button('⬇️ Recibo e protocolos congelados (JSON)',
+                        json.dumps(receipt26, ensure_ascii=False, indent=2).encode('utf-8'),
+                        'recibo_prospectivo_v26.json', 'application/json',
+                        use_container_width=True, key='v26_download_receipt')
 
         if compare:
             try:
