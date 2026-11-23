@@ -1,4 +1,4 @@
-"""Trader Pro AI Elite v3.1 — pesquisa e ponte DEMO opcional para Android."""
+"""Trader Pro AI Elite v3.2 — pesquisa e ponte DEMO opcional para Android."""
 import json
 import hmac
 import time
@@ -99,7 +99,7 @@ def render_differences_v18(summary, fields, ranges, events, key_prefix):
     st.error('🛑 Diagnóstico exploratório: 0 dias certificados, SEM BACKTEST e SEM ORDENS REAIS.')
 
 
-st.set_page_config(page_title='Trader Pro AI Elite · v3.1',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
+st.set_page_config(page_title='Trader Pro AI Elite · v3.2',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
 st.markdown("""<style>
 :root {color-scheme:dark}
 .stApp{background:radial-gradient(ellipse at 100% 0%,#1f173f 0%,#0c1020 35%,#080c16 72%);color:#edf1ff}
@@ -157,11 +157,11 @@ section[data-testid="stSidebar"]{background:#11162a}
 .smartstrip.venda{border-left:5px solid #ff8ba4}
 </style>""",unsafe_allow_html=True)
 
-st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V3.1</div>
+st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V3.2</div>
 <div class="hero-title">◈ TRADER PRO AI ELITE</div>
 <div class="hero-sub">WIN · Intraday · Filtros EMA 9/21, RSI 14, ATR 14 e tendência 15m</div>
 <span class="pill">● PESQUISA SEGURA · ORDENS DESATIVADAS</span></div>''',unsafe_allow_html=True)
-st.caption('v3.1 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
+st.caption('v3.2 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
 
 # Na ausencia de feed autenticado, NUNCA promover candles historicos a sinais atuais.
 if 'smart27_current' not in st.session_state:
@@ -188,7 +188,7 @@ def render_smart_strip_v27():
     stamp = alert.occurred_at.astimezone(BRT).strftime('%H:%M:%S') if is_demo_event else '—'
     st.markdown(
         '<div class="smartstrip ' + alert.status.lower() + '">' +
-        '<div class="smarthead">🔔 SMART ALERTS V3.1 · ' + status_label + '</div>' +
+        '<div class="smarthead">🔔 SMART ALERTS V3.2 · ' + status_label + '</div>' +
         '<div class="smartstate">' + title + '</div>' +
         '<div class="smartdetail">' + escape(alert.reason) + '</div>' +
         '<div class="smartfoot">WINZ26 · horário da simulação: ' + stamp +
@@ -320,7 +320,7 @@ else:
 tab_smart,tab_historic,tab_terminal,tab_decision,tab_bt,tab_robust,tab_audit,tab_data,tab_source=st.tabs(['🔔 Smart Alerts','🔬 Histórico','📈 Sinais','🛑 Não operar','🧪 Backtest','🧬 Robustez','🛡️ Auditoria','🔐 Dados','🧾 Fonte M1'])
 
 with tab_smart:
-    st.subheader('🔔 Smart Alerts · v3.1')
+    st.subheader('🔔 Smart Alerts · v3.2')
     st.warning('DEMONSTRAÇÃO: alertas nesta tela são simulados. O Streamlit não envia notificações nativas nem mostra janelas sobre a corretora. NÃO use para operar.')
     st.caption('A faixa de status aparece no começo do aplicativo. O aviso é exibido apenas quando o estado muda, enquanto a sessão web está aberta. A simulação expira em 60 segundos.')
     scenario = st.selectbox('Escolha uma situação para testar', list(DEMO_SCENARIOS),
@@ -356,10 +356,10 @@ with tab_smart:
         st.download_button('⬇️ Exportar auditoria das simulações',
                            events_df.to_csv(index=False).encode('utf-8-sig'),
                            'smart_alerts_demo_v27.csv','text/csv',use_container_width=True)
-    st.caption('Smart Overlay Android v3.1: ponte opcional DEMO via Supabase. Continua sem dados oficiais, sinais reais ou execução.')
+    st.caption('Smart Overlay Android v3.2: ponte opcional DEMO via Supabase. Continua sem dados oficiais, sinais reais ou execução.')
 
     st.divider()
-    st.subheader('📡 Ponte Android · v3.1 · APENAS SIMULAÇÃO')
+    st.subheader('📡 Ponte Android · v3.2 · APENAS SIMULAÇÃO')
     st.caption('A demonstração automática segue um roteiro fictício, NÃO o gráfico WIN. '
                'O Streamlit publica no Supabase; o Android consulta pela internet. '
                'Não é feed de mercado nem alerta operável.')
@@ -375,6 +375,17 @@ with tab_smart:
     if 'bridge31_seq' not in st.session_state: st.session_state['bridge31_seq']=0
     if 'bridge31_next_at' not in st.session_state: st.session_state['bridge31_next_at']=0.0
     if 'bridge31_last' not in st.session_state: st.session_state['bridge31_last']='—'
+    if 'bridge32_publish_log' not in st.session_state: st.session_state['bridge32_publish_log']=[]
+    def record_bridge32_publish(event: dict, http_ms: int):
+        # Only successful HTTP responses get an entry. This is NOT a device receipt acknowledgment.
+        record = {
+            'emitido_utc': event['issued_at'],
+            'estado_demo': event['status'],
+            'event_id_prefixo': event['event_id'][:8],
+            'http_publicacao_ms': http_ms,
+            'recebimento_android': 'NÃO CONFIRMADO',
+        }
+        st.session_state['bridge32_publish_log'] = (st.session_state['bridge32_publish_log'] + [record])[-50:]
     if not configured:
         st.info('Ponte desativada: configure Supabase e os três Secrets do Streamlit. '
                 'Sem configuração, o Android permanece em NÃO OPERAR.')
@@ -397,20 +408,38 @@ with tab_smart:
         if st.button('🛑 Parar roteiro e publicar NÃO OPERAR',key='bridge31_stop'):
             st.session_state['bridge31_active']=False
             try:
-                publish_demo(BridgeConfig(bridge_url,bridge_secret),'NAO_OPERAR')
+                start_http = time.monotonic()
+                event = publish_demo(BridgeConfig(bridge_url,bridge_secret),'NAO_OPERAR')
+                record_bridge32_publish(event, round((time.monotonic()-start_http)*1000))
                 st.session_state['bridge31_last']='NAO_OPERAR · parada manual'
             except (RuntimeError,ValueError) as exc:
                 st.error('A ponte não confirmou a parada; Android bloqueará avisos vencidos.')
+        def render_bridge32_publish_log():
+            st.markdown('**📋 Envios DEMO confirmados pelo Supabase nesta sessão**')
+            st.caption('HTTP de publicação mede só o tempo de resposta do servidor. Não confirma '
+                       'o recebimento pelo Android, nem mede a latência total. '
+                       'Confira o histórico local do aplicativo Android para comparar.')
+            if st.session_state['bridge32_publish_log']:
+                publishes = pd.DataFrame(st.session_state['bridge32_publish_log'])
+                st.dataframe(publishes, hide_index=True, use_container_width=True)
+                st.download_button('⬇️ Baixar registro de publicações DEMO',
+                    publishes.to_csv(index=False).encode('utf-8-sig'),
+                    'ponte_publicacoes_demo_v32.csv', 'text/csv', key='bridge32_csv')
+            else:
+                st.info('Nenhuma publicação confirmada nesta sessão.')
         @st.fragment(run_every='5s')
         def bridge31_automatic_cycle():
             if not st.session_state.get('bridge31_active',False):
                 st.caption('Roteiro parado. Nenhum aviso automático sendo publicado.')
+                render_bridge32_publish_log()
                 return
             tick = time.monotonic()
             if tick >= st.session_state['bridge31_next_at']:
                 state = AUTO_CYCLE[st.session_state['bridge31_seq'] % len(AUTO_CYCLE)]
                 try:
-                    publish_demo(BridgeConfig(bridge_url,bridge_secret),state)
+                    start_http = time.monotonic()
+                    event = publish_demo(BridgeConfig(bridge_url,bridge_secret),state)
+                    record_bridge32_publish(event, round((time.monotonic()-start_http)*1000))
                 except (RuntimeError,ValueError):
                     st.session_state['bridge31_active']=False
                     st.error('Falha de rede. Roteiro interrompido; avisos vencidos serão rejeitados no Android.')
@@ -423,6 +452,7 @@ with tab_smart:
             st.info('ROTEIRO FICTÍCIO ATIVO · último estado enviado: '
                     + st.session_state['bridge31_last']
                     + ' · nenhuma ordem / nenhum dado real.')
+            render_bridge32_publish_log()
         bridge31_automatic_cycle()
 
 with tab_historic:
@@ -1533,4 +1563,4 @@ with tab_source:
                 st.error(f'Autoteste rejeitado: {exc}')
 
 st.divider()
-st.caption('Trader Pro AI Elite · v2.4 · Simulador de pesquisa. Horários de referência B3 para 2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')
+st.caption('Trader Pro AI Elite · v3.2 · Simulador de pesquisa. Horários de referência B3 para 2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')
