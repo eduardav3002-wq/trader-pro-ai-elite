@@ -11,6 +11,7 @@ from backtest import backtest
 from risk_comparison import compare_risk_limits
 from forward_validation import evaluate_forward, sample_stress
 from execution_audit import audit_slippage_scenarios
+from fragility_lab import analyze_fragility
 from research import robustness_report
 from validation import chronological_validation
 from provenance import inspect_historical_csv
@@ -90,7 +91,7 @@ def render_differences_v18(summary, fields, ranges, events, key_prefix):
     st.error('🛑 Diagnóstico exploratório: 0 dias certificados, SEM BACKTEST e SEM ORDENS REAIS.')
 
 
-st.set_page_config(page_title='Trader Pro AI Elite · v2.3',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
+st.set_page_config(page_title='Trader Pro AI Elite · v2.4',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
 st.markdown("""<style>
 :root {color-scheme:dark}
 .stApp{background:radial-gradient(ellipse at 100% 0%,#1f173f 0%,#0c1020 35%,#080c16 72%);color:#edf1ff}
@@ -137,11 +138,11 @@ section[data-testid="stSidebar"]{background:#11162a}
 }
 </style>""",unsafe_allow_html=True)
 
-st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V2.3</div>
+st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V2.4</div>
 <div class="hero-title">◈ TRADER PRO AI ELITE</div>
 <div class="hero-sub">WIN · Intraday · Filtros EMA 9/21, RSI 14, ATR 14 e tendência 15m</div>
 <span class="pill">● PESQUISA SEGURA · ORDENS DESATIVADAS</span></div>''',unsafe_allow_html=True)
-st.caption('v2.3 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
+st.caption('v2.4 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
 st.markdown('### 📁 Escolha como analisar')
 source = st.radio('Fonte dos candles', ['Demonstração fictícia', 'CSV histórico 2026 · origem declarada', 'Amostra pública B3 · WINZ26', '🔬 Explorar 2019–2020 · SEM backtest', '🧾 Conferir CSV com ticker · SEM backtest'], index=0, horizontal=False, label_visibility='collapsed')
 st.caption('Demonstração = fictícia. Históricos = auditoria de origem declarada. O novo modo com ticker é apenas inspeção, SEM sinais ou backtest.')
@@ -640,10 +641,12 @@ with tab_bt:
                     st.session_state['sample_v23_compare'] = compare_risk_limits(checked, contract)
                     st.session_state['sample_v23_stress'] = sample_stress(checked, contract)
                     st.session_state['sample_v23_audit'] = audit_slippage_scenarios(checked, contract)
+                    st.session_state['sample_v24_fragility'] = analyze_fragility(st.session_state['sample_v23_audit']['operacoes_por_cenario'])
                 except (ValueError, TypeError, AssertionError) as exc:
                     st.session_state.pop('sample_v23_compare', None)
                     st.session_state.pop('sample_v23_stress', None)
                     st.session_state.pop('sample_v23_audit', None)
+                    st.session_state.pop('sample_v24_fragility', None)
                     st.error('Não foi possível concluir a auditoria: ' + str(exc))
             if 'sample_v23_audit' in st.session_state:
                 st.subheader('Limites de risco na amostra exploratória')
@@ -675,6 +678,36 @@ with tab_bt:
                         st.download_button(title, df23.to_csv(index=False).encode('utf-8-sig'),
                             f'auditoria_slippage_v23_{file_tag}.csv', 'text/csv',
                             use_container_width=True, key='download_v23_'+file_tag)
+
+            with st.expander('🛡️ Dependência dos lucros e incerteza · v2.4', expanded=True):
+                st.caption('Amostra de apenas 8 pregões. Nenhum parâmetro foi reajustado e nenhuma validação futura foi realizada. Os cenários são independentes entre si; não some operações de slippages diferentes.')
+                fragile = st.session_state.get('sample_v24_fragility')
+                if fragile is None:
+                    fragile = analyze_fragility(audit23['operacoes_por_cenario'])
+                frag = fragile['resumo']
+                keyrow = frag.loc[frag['Limite (pts)'].eq(250) & frag['Slippage (ticks por lado)'].eq(3)].iloc[0]
+                bigrow = frag.loc[frag['Limite (pts)'].eq(500) & frag['Slippage (ticks por lado)'].eq(3)].iloc[0]
+                c1,c2=st.columns(2)
+                c1.metric('250 pts · 3 ticks · saldo', f"{keyrow['Saldo líquido (pts)']:+,.0f} pts")
+                c2.metric('250 pts · sem maior ganho', f"{keyrow['Saldo menos melhor operação (pts)']:+,.0f} pts")
+                c3,c4=st.columns(2)
+                c3.metric('500 pts · 3 ticks · saldo', f"{bigrow['Saldo líquido (pts)']:+,.0f} pts")
+                c4.metric('500 pts · sem maior ganho', f"{bigrow['Saldo menos melhor operação (pts)']:+,.0f} pts")
+                st.markdown('**Concentração por limite e custo**')
+                st.dataframe(frag[['Limite (pts)', 'Slippage (ticks por lado)', 'Operações',
+                    'Saldo líquido (pts)','Saldo menos melhor operação (pts)',
+                    'Saldo menos melhor pregão (pts)', 'Rebaixamento máximo (pts)',
+                    'Saídas intrabar com tempo incerto', 'Lucro depende da melhor operação']],
+                    hide_index=True, use_container_width=True)
+                st.warning('Remover a melhor operação ou pregão é apenas um cálculo ilustrativo: o motor NÃO reexecuta as operações seguintes, que poderiam mudar por limites diários. Horários intrabar incertos não comprovam fills reais.')
+                st.markdown('**Resultados por dia com operação**')
+                st.dataframe(fragile['por_dia'], hide_index=True, use_container_width=True)
+                st.download_button('⬇️ Concentração e incerteza (CSV)',
+                    frag.to_csv(index=False).encode('utf-8-sig'),
+                    'concentracao_risco_v24.csv','text/csv',use_container_width=True,key='v24_concentration')
+                st.download_button('⬇️ Operações agrupadas por dia (CSV)',
+                    fragile['por_dia'].to_csv(index=False).encode('utf-8-sig'),
+                    'resultados_por_dia_v24.csv','text/csv',use_container_width=True,key='v24_daily')
 
         if source == 'Amostra pública B3 · WINZ26':
             with st.expander('🔬 Validação futura + estresse · v2.2'):
@@ -1220,4 +1253,4 @@ with tab_source:
                 st.error(f'Autoteste rejeitado: {exc}')
 
 st.divider()
-st.caption('Trader Pro AI Elite · v2.3 · Simulador de pesquisa. Horários de referência B3 para 2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')
+st.caption('Trader Pro AI Elite · v2.4 · Simulador de pesquisa. Horários de referência B3 para 2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')

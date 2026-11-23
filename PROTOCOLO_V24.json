@@ -1,0 +1,35 @@
+{
+  "aplicativo": "Trader Pro AI Elite",
+  "versao": "2.4",
+  "classificacao": "EXPLORATORIO_HISTORICO_NAO_VALIDADO",
+  "base": "v2.3 (motor de backtest e parâmetros congelados sem mudanças)",
+  "pregoes_avaliados": 8,
+  "novos_pregoes_avaliados": 0,
+  "arquivo_de_origem_auditado": "auditoria_slippage_v23_cenarios.csv",
+  "sha256_upload_usuario": "f18ce0047744072df707a6311df34a9b9ce954acbab73db7013188649ab8374f",
+  "sha256_amostra_incluida": "1c60f464372f30af9571b5ae9e43f09642fbd8e2eb09dcd230d623421b8e42c9",
+  "resultado_identico_ao_backtest_v23": true,
+  "mudancas": [
+    "concentracao de lucro por melhor operação e melhor dia",
+    "rebaixamento de operações encerradas",
+    "marcação de saídas intrabar incertas",
+    "CSV de resumo e por pregão",
+    "testes de regressão"
+  ],
+  "limites_de_risco_pts": [
+    125,
+    175,
+    250,
+    500
+  ],
+  "slippage_ticks_por_lado": [
+    1,
+    2,
+    3
+  ],
+  "alteracao_de_regras_do_motor": false,
+  "ordens_liberadas": false,
+  "fonte_certificada_independentemente": false,
+  "ressalva_exclusao": "Resultado menos melhor operação ou dia NÃO reexecuta backtest nem preserva necessariamente a dinâmica das travas.",
+  "testes": "186 passed, 1 skipped"
+}

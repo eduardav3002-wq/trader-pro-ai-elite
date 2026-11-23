@@ -1,3 +1,34 @@
+# ◈ Trader Pro AI Elite v2.4 — Concentração de lucros e incerteza
+
+**Novidade em 23/11/2026** · Análise exploratória de fragilidade; **não muda** os parâmetros de trading, as entradas ou as saídas do motor de backtest. Não há ordens reais nem IA treinada.
+
+## Como testar no celular
+
+1. Atualize todos os arquivos na raiz do repositório GitHub (mantenha `app.py` como entrada do Streamlit).
+2. Abra o app e confira o cabeçalho `RESEARCH TERMINAL · V2.4`.
+3. Selecione **Amostra pública B3 · WINZ26** (não a opção de demonstração fictícia).
+4. Na aba **Backtest**, toque **Comparar limites de risco · Seletivo**.
+5. Abra **🛡️ Dependência dos lucros e incerteza · v2.4**.
+6. Confira os saldos com e sem a melhor operação, a distribuição dos resultados por pregão, os rebaixamentos máximos e a proporção de saídas com horário intrabar incerto; baixe os dois CSVs no próprio app.
+
+## O que identificamos no arquivo enviado
+
+- Os 53 registros do CSV `auditoria_slippage_v23_cenarios.csv` foram conferidos contra a saída da v2.3 e coincidem integralmente.
+- Com risco máximo estimado de **250 pts** e slippage de **3 ticks por lado**, 4 operações somaram **+262 pts**; excluindo **aritmeticamente** a melhor operação, restam **+74 pts**, e o rebaixamento por operações encerradas foi **192 pts**.
+- Com risco máximo estimado de **500 pts**, slippage de **3 ticks por lado**, 12 operações somaram **+486 pts**; sem a maior operação, o saldo matemático seria **−57 pts**, e o rebaixamento das operações encerradas foi **1.062 pts**.
+- Nas 12 operações do cenário 500/3, **9** saídas foram marcadas com horário exato intrabar desconhecido. No cenário 250/3, foram **2 de 4**.
+- **Sem melhor operação** e **sem melhor pregão** são testes meramente descritivos: o algoritmo **não refaz o backtest** depois de excluir uma operação. A dinâmica de limite diário e sinais posteriores poderia ser diferente.
+- As 8 sessões já observadas são **amostra de pesquisa**, não avaliação fora da amostra. Resultados positivos não certificam robustez, autenticidade de dados, execução de ordens ou rentabilidade futura.
+
+## Integridade e limitações
+
+- `fragility_lab.py` analisa somente os cenários fixados (125, 175, 250, 500 pts × 1, 2, 3 ticks/lado). Recusa sinais duplicados e cenários fora do protocolo.
+- `test_fragility_lab.py` contém oito testes novos e preserva integralmente a suíte anterior: **186 passaram, 1 ignorado** no ambiente de testes.
+- Nenhuma mudança no `backtest.py`, `engine.py`, `forward_validation.py` ou em outros filtros. Feriados da B3 e outros bloqueios permanecem.
+- A interface Streamlit precisa ser confirmada no celular após publicação.
+
+---
+
 # ◈ Trader Pro AI Elite v2.3 — Auditoria de slippage operação a operação
 
 **Atualização:** 23/11/2026 — pesquisa do WINZ26, sem ordens reais, sem IA treinada, sem certificação independente de origem dos preços.
