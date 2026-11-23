@@ -1,8 +1,41 @@
+# ◈ Trader Pro AI Elite v2.3 — Auditoria de slippage operação a operação
+
+**Atualização:** 23/11/2026 — pesquisa do WINZ26, sem ordens reais, sem IA treinada, sem certificação independente de origem dos preços.
+
+## O que mudou
+
+- Após escolher **Amostra pública B3 · WINZ26**, entre em **Backtest**, toque **Comparar limites de risco · Seletivo** e abra **🔍 Auditoria das diferenças · v2.3**.
+- O app guarda o resultado da comparação na sessão, inclusive depois de tocar nos botões de download.
+- Agora compara cada operação pelo **candle que originou o sinal**, nos cenários de 1, 2 e 3 ticks de slippage por lado, para 125, 175, 250 e 500 pontos de risco por operação.
+- Mostra quantidade de operações comuns, operações removidas ou acrescentadas, o **motivo do bloqueio**, e se o preço, motivo ou candle de saída mudou.
+- Decompõe variação do saldo líquido em **mudança do resultado bruto** (efeito das saídas e da seleção) e **mudança do total de custos** (taxa + slippage). Quando operações deixam de existir, a decomposição inclui também os custos e resultados das operações excluídas; portanto, não confundir com custo puro de execução para uma amostra fixa de trades.
+- Exporta três novos CSVs: comparações pareadas, detalhes por operação e todas as operações dos cenários.
+- **Não modifica** sinal, calendário 2026, filtro de feriados, valores predefinidos, gerenciamento de risco, nem metodologia de validação futura v2.2.
+
+## O que encontramos na amostra de 10–19/11/2026
+
+- **Limite 250**, slippage 1 → 3 ticks/lado: resultado líquido **+682 → +262 pts**; queda de **420 pts**, dos quais **340 pts** na mudança dos resultados brutos/saídas e **80 pts** em custos adicionais. As mesmas **4 operações** foram executadas, mas duas mudaram de tipo de encerramento.
+- Em **12/11**, a venda do candle-sinal 314 deixou de atingir o alvo e saiu por tempo: **+298 → +93 pts** (1 → 3 ticks).
+- Em **13/11**, a compra do candle-sinal 441 passou de saída no fim do pregão para stop: **−7 → −192 pts** (1 → 3 ticks).
+- **Limite 175**, slippage 1 → 3 ticks/lado: resultado **+31 → +188 pts**, porque a operação perdedora de 13/11, candle-sinal 444, deixou de ocorrer por **RISCO_OPERACAO_EXCEDIDO**. Isso não prova robustez a custos.
+- **Limite 500**, slippage 3 ticks/lado: **+486 pts** líquidos, mas **1.062 pts** de rebaixamento máximo. O limite de perda diária é somente sobre perdas **já realizadas**, podendo uma operação perder mais que 200 pts.
+- Os resultados continuam **exploratórios, não independentes e insuficientes para operar**. Nenhuma configuração foi escolhida como ótima; 250 pts permanece apenas candidato a investigação.
+
+## Instalar no celular pelo GitHub
+
+1. Extraia o arquivo `Trader_Pro_AI_Elite_v2_3_GitHub.zip` no celular.
+2. Envie **todos os arquivos extraídos**, não o ZIP fechado, à **raiz** do repositório GitHub usado pelo Streamlit Cloud. Substitua arquivos de mesmo nome, preservando o entrypoint `app.py`.
+3. Confirme as alterações (Commit changes) e recarregue o app; o cabeçalho deverá exibir **RESEARCH TERMINAL · V2.3**.
+4. Selecione **Amostra pública B3 · WINZ26** → **Backtest** → **Comparar limites de risco · Seletivo** → **🔍 Auditoria das diferenças · v2.3**.
+5. Faça download do CSV **Operação a operação** e compare especialmente os cenários de 250 pts.
+
+A avaliação em pregões novos só começará quando dados M5 autênticos, completos e subsequentes à amostra histórica forem importados. A declaração de origem não é certificação. O motor bloqueia feriados e fins de semana de 2026; não alterar esses controles.
+
+---
+
 # Trader Pro AI Elite v2.2 — Avaliação futura auditável e teste de estresse
 
 **Objetivo:** analisar apenas pregões inéditos do WINZ26 sem ajustar parâmetros aos resultados novos. O app é ferramenta de pesquisa e não envia ordens. Não possui IA treinada, integração com corretoras ou garantia de retorno.
-
-**Verificação técnica da entrega:** `python -m pytest -q` — 169 testes aprovados, 1 ignorado (interface Streamlit real não verificada neste ambiente).
 
 ## Novidades da v2.2
 

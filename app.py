@@ -10,6 +10,7 @@ from audit import audit_trades
 from backtest import backtest
 from risk_comparison import compare_risk_limits
 from forward_validation import evaluate_forward, sample_stress
+from execution_audit import audit_slippage_scenarios
 from research import robustness_report
 from validation import chronological_validation
 from provenance import inspect_historical_csv
@@ -89,7 +90,7 @@ def render_differences_v18(summary, fields, ranges, events, key_prefix):
     st.error('🛑 Diagnóstico exploratório: 0 dias certificados, SEM BACKTEST e SEM ORDENS REAIS.')
 
 
-st.set_page_config(page_title='Trader Pro AI Elite · v2.2',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
+st.set_page_config(page_title='Trader Pro AI Elite · v2.3',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
 st.markdown("""<style>
 :root {color-scheme:dark}
 .stApp{background:radial-gradient(ellipse at 100% 0%,#1f173f 0%,#0c1020 35%,#080c16 72%);color:#edf1ff}
@@ -136,11 +137,11 @@ section[data-testid="stSidebar"]{background:#11162a}
 }
 </style>""",unsafe_allow_html=True)
 
-st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V2.2</div>
+st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V2.3</div>
 <div class="hero-title">◈ TRADER PRO AI ELITE</div>
 <div class="hero-sub">WIN · Intraday · Filtros EMA 9/21, RSI 14, ATR 14 e tendência 15m</div>
 <span class="pill">● PESQUISA SEGURA · ORDENS DESATIVADAS</span></div>''',unsafe_allow_html=True)
-st.caption('v2.2 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
+st.caption('v2.3 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
 st.markdown('### 📁 Escolha como analisar')
 source = st.radio('Fonte dos candles', ['Demonstração fictícia', 'CSV histórico 2026 · origem declarada', 'Amostra pública B3 · WINZ26', '🔬 Explorar 2019–2020 · SEM backtest', '🧾 Conferir CSV com ticker · SEM backtest'], index=0, horizontal=False, label_visibility='collapsed')
 st.caption('Demonstração = fictícia. Históricos = auditoria de origem declarada. O novo modo com ticker é apenas inspeção, SEM sinais ou backtest.')
@@ -633,14 +634,47 @@ with tab_bt:
             min_rr=0.0
         run=st.button('Executar backtest',type='primary',use_container_width=True)
         compare=st.button('Comparar base v0.5 × seletivo v1.1 (mesmos parâmetros)',use_container_width=True)
-        if source == 'Amostra pública B3 · WINZ26' and st.button(
-                'Comparar limites de risco · Seletivo', use_container_width=True):
-            st.subheader('Limites de risco na amostra exploratória')
-            st.caption('Cenários fixos: 2 pts de taxa por operação, 5 pts de slippage por lado, até 3 operações por dia, 12 candles por operação e pausa após 2 perdas seguidas. Limite de perda realizada de 200 pts por dia e risco-retorno mínimo de 1.')
-            st.dataframe(compare_risk_limits(checked, contract), hide_index=True, use_container_width=True)
-            st.markdown('**🧪 Sensibilidade a slippage na MESMA amostra**')
-            st.caption('Comparação em 8 pregões já observados, não é previsão ou avaliação fora da amostra. Cada mudança de slippage recalcula filtros de risco, entradas e saídas.')
-            st.dataframe(sample_stress(checked, contract), hide_index=True, use_container_width=True)
+        if source == 'Amostra pública B3 · WINZ26':
+            if st.button('Comparar limites de risco · Seletivo', use_container_width=True):
+                try:
+                    st.session_state['sample_v23_compare'] = compare_risk_limits(checked, contract)
+                    st.session_state['sample_v23_stress'] = sample_stress(checked, contract)
+                    st.session_state['sample_v23_audit'] = audit_slippage_scenarios(checked, contract)
+                except (ValueError, TypeError, AssertionError) as exc:
+                    st.session_state.pop('sample_v23_compare', None)
+                    st.session_state.pop('sample_v23_stress', None)
+                    st.session_state.pop('sample_v23_audit', None)
+                    st.error('Não foi possível concluir a auditoria: ' + str(exc))
+            if 'sample_v23_audit' in st.session_state:
+                st.subheader('Limites de risco na amostra exploratória')
+                st.caption('Cenários fixos: 2 pts de taxa por operação, 5 pts de slippage por lado, até 3 operações por dia, 12 candles por operação e pausa após 2 perdas seguidas. Limite de perda realizada de 200 pts por dia e risco-retorno mínimo de 1.')
+                st.dataframe(st.session_state['sample_v23_compare'], hide_index=True, use_container_width=True)
+                st.markdown('**🧪 Sensibilidade a slippage na MESMA amostra**')
+                st.caption('Comparação em oito pregões já observados. Cada slippage altera preenchimento, stop, alvo e às vezes a elegibilidade e a duração das operações. Não é validação futura.')
+                st.dataframe(st.session_state['sample_v23_stress'], hide_index=True, use_container_width=True)
+                with st.expander('🔍 Auditoria das diferenças · v2.3', expanded=True):
+                    audit23 = st.session_state['sample_v23_audit']
+                    st.warning('Os resultados são EXPLORATÓRIOS. A melhora de um saldo ao elevar os custos pode acontecer porque uma operação perdedora deixa de ser elegível.')
+                    st.markdown('**Quanto da mudança veio de custos e quanto veio dos resultados das saídas?**')
+                    st.dataframe(audit23['comparacoes'], hide_index=True, use_container_width=True)
+                    st.caption('Variação líquida = variação do resultado bruto + variação dos custos. A categoria “mudaram saída” inclui preço de saída diferente mesmo sem mudança do motivo. Em cenários com operações ausentes, a decomposição também inclui as operações retiradas ou adicionadas.')
+                    st.markdown('**Operações individuais · limite 250 pts · comparação com 2 e 3 ticks por lado**')
+                    interesting = audit23['operacoes_pareadas'].loc[
+                        audit23['operacoes_pareadas']['Limite (pts)'].eq(250)]
+                    st.dataframe(interesting, hide_index=True, use_container_width=True)
+                    blocked = audit23['operacoes_pareadas'].loc[
+                        audit23['operacoes_pareadas']['Correspondência'].ne('AMBOS')]
+                    if not blocked.empty:
+                        st.markdown('**Sinais que deixaram de virar operação ou passaram a virar operação**')
+                        st.dataframe(blocked, hide_index=True, use_container_width=True)
+                    for file_tag, title, df23 in (
+                        ('pares', '⬇️ Resumo de divergências (CSV)', audit23['comparacoes']),
+                        ('operacoes', '⬇️ Operação a operação (CSV)', audit23['operacoes_pareadas']),
+                        ('cenarios', '⬇️ Todas as execuções por cenário (CSV)', audit23['operacoes_por_cenario']),
+                    ):
+                        st.download_button(title, df23.to_csv(index=False).encode('utf-8-sig'),
+                            f'auditoria_slippage_v23_{file_tag}.csv', 'text/csv',
+                            use_container_width=True, key='download_v23_'+file_tag)
 
         if source == 'Amostra pública B3 · WINZ26':
             with st.expander('🔬 Validação futura + estresse · v2.2'):
@@ -1186,4 +1220,4 @@ with tab_source:
                 st.error(f'Autoteste rejeitado: {exc}')
 
 st.divider()
-st.caption('Trader Pro AI Elite · v2.2 · Simulador de pesquisa. Horários de referência B3 para 2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')
+st.caption('Trader Pro AI Elite · v2.3 · Simulador de pesquisa. Horários de referência B3 para 2026; verifique o calendário oficial e possíveis mudanças. Não utilizar para decisões financeiras reais.')

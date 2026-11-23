@@ -1,0 +1,25 @@
+{
+  "aplicativo": "Trader Pro AI Elite",
+  "versao": "2.3",
+  "base": "v2.2 (sem alterar parâmetros nem elegibilidade)",
+  "aquecimento": "2026-11-10 a 2026-11-19 (8 pregões M5)",
+  "analise": "apenas retrospectiva exploratória da amostra antiga",
+  "novos_pregoes_avaliados": 0,
+  "mudancas": [
+    "auditoria pareada de slippage",
+    "motivos de bloqueio",
+    "decomposição de variação bruta versus custos",
+    "exportações CSV"
+  ],
+  "controle_risco": "sem mudança da v2.2",
+  "ordens_liberadas": false,
+  "fonte_certificada_independentemente": false,
+  "codigo_comparador": "execution_audit.py",
+  "teste": "178 passed, 1 skipped",
+  "sha256_csv_amostra_bruto": "1c60f464372f30af9571b5ae9e43f09642fbd8e2eb09dcd230d623421b8e42c9",
+  "avisos": [
+    "Número de operações pequeno e amostra já observada.",
+    "Não é estratégia validada nem recomendação de trading.",
+    "Não selecionar parâmetros por desempenho na amostra antiga."
+  ]
+}
