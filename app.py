@@ -1,4 +1,4 @@
-"""Trader Pro AI Elite v2.6 — terminal de pesquisa offline, sem ordens reais."""
+"""Trader Pro AI Elite v2.7 — terminal de pesquisa offline, sem ordens reais."""
 import json
 from pathlib import Path
 
@@ -14,6 +14,9 @@ from execution_audit import audit_slippage_scenarios
 from fragility_lab import analyze_fragility
 from daily_budget_v25 import compare_daily_budget, compare_guarded_future
 from forward_lab_v26 import evaluate_prospective_v26, BASELINE_SHA256
+from smart_alerts_v27 import (BRT, DEMO_SCENARIOS, default_alert, demo_alert,
+                              effective_alert, should_notify, now_brt)
+from html import escape
 from research import robustness_report
 from validation import chronological_validation
 from provenance import inspect_historical_csv
@@ -93,7 +96,7 @@ def render_differences_v18(summary, fields, ranges, events, key_prefix):
     st.error('🛑 Diagnóstico exploratório: 0 dias certificados, SEM BACKTEST e SEM ORDENS REAIS.')
 
 
-st.set_page_config(page_title='Trader Pro AI Elite · v2.6',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
+st.set_page_config(page_title='Trader Pro AI Elite · v2.7',page_icon='📈',layout='wide',initial_sidebar_state='collapsed')
 st.markdown("""<style>
 :root {color-scheme:dark}
 .stApp{background:radial-gradient(ellipse at 100% 0%,#1f173f 0%,#0c1020 35%,#080c16 72%);color:#edf1ff}
@@ -138,13 +141,59 @@ section[data-testid="stSidebar"]{background:#11162a}
  [data-testid="stDataFrame"]{max-width:100%}
  h2{font-size:1.35rem!important}
 }
+
+/* Faixa informativa de Smart Alerts; NAO e overlay sobre outras aplicacoes. */
+.smartstrip{border:1px solid #44446f;border-radius:14px;padding:13px 15px;margin:0 0 18px;background:linear-gradient(115deg,#171a30,#12213a)}
+.smartstrip .smarthead{color:#a9b9df;font-size:.72rem;font-weight:750;letter-spacing:.08em}
+.smartstrip .smartstate{font-size:1.08rem;font-weight:850;margin-top:4px}
+.smartstrip .smartdetail{color:#c0cbe1;font-size:.82rem;line-height:1.5;margin-top:4px}
+.smartstrip .smartfoot{color:#91a5c2;font-size:.69rem;margin-top:6px}
+.smartstrip.nao_operar{border-left:5px solid #f3b25c}
+.smartstrip.aguardar{border-left:5px solid #adbeda}
+.smartstrip.compra{border-left:5px solid #50d0a0}
+.smartstrip.venda{border-left:5px solid #ff8ba4}
 </style>""",unsafe_allow_html=True)
 
-st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V2.6</div>
+st.markdown('''<div class="hero"><div class="eyebrow">RESEARCH TERMINAL · V2.7</div>
 <div class="hero-title">◈ TRADER PRO AI ELITE</div>
 <div class="hero-sub">WIN · Intraday · Filtros EMA 9/21, RSI 14, ATR 14 e tendência 15m</div>
 <span class="pill">● PESQUISA SEGURA · ORDENS DESATIVADAS</span></div>''',unsafe_allow_html=True)
-st.caption('v2.6 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
+st.caption('v2.7 mobile-first · motor experimental auditável · sem IA treinada, cotações ao vivo ou ordens reais. Acurácia futura desconhecida.')
+
+# Na ausencia de feed autenticado, NUNCA promover candles historicos a sinais atuais.
+if 'smart27_current' not in st.session_state:
+    st.session_state['smart27_current'] = default_alert()
+if 'smart27_notified' not in st.session_state:
+    st.session_state['smart27_notified'] = None
+if 'smart27_log' not in st.session_state:
+    st.session_state['smart27_log'] = []
+
+@st.fragment(run_every='5s')
+def render_smart_strip_v27():
+    alert = effective_alert(st.session_state['smart27_current'], now_brt())
+    st.session_state['smart27_current'] = alert
+    if should_notify(st.session_state.get('smart27_notified'), alert):
+        if alert.event_id != 'demo_expirou':
+            st.toast('🔔 SIMULAÇÃO: ' + alert.status.replace('_',' ') + ' · ' + alert.reason,
+                     icon='🛑' if alert.status == 'NAO_OPERAR' else '🔔')
+        st.session_state['smart27_notified'] = alert.event_id
+    title = {'COMPRA':'COMPRA · SIMULAÇÃO', 'VENDA':'VENDA · SIMULAÇÃO',
+             'AGUARDAR':'AGUARDAR · SIMULAÇÃO',
+             'NAO_OPERAR':'NÃO OPERAR'}[alert.status]
+    is_demo_event = alert.event_id.startswith('demo:')
+    status_label = 'DEMONSTRAÇÃO · NÃO É SINAL REAL' if is_demo_event else 'SEM FEED AO VIVO'
+    stamp = alert.occurred_at.astimezone(BRT).strftime('%H:%M:%S') if is_demo_event else '—'
+    st.markdown(
+        '<div class="smartstrip ' + alert.status.lower() + '">' +
+        '<div class="smarthead">🔔 SMART ALERTS V2.7 · ' + status_label + '</div>' +
+        '<div class="smartstate">' + title + '</div>' +
+        '<div class="smartdetail">' + escape(alert.reason) + '</div>' +
+        '<div class="smartfoot">WINZ26 · horário da simulação: ' + stamp +
+        ' (Brasília) · sem alertas externos nem ordens reais</div></div>',
+        unsafe_allow_html=True)
+
+render_smart_strip_v27()
+
 st.markdown('### 📁 Escolha como analisar')
 source = st.radio('Fonte dos candles', ['Demonstração fictícia', 'CSV histórico 2026 · origem declarada', 'Amostra pública B3 · WINZ26', '🔬 Explorar 2019–2020 · SEM backtest', '🧾 Conferir CSV com ticker · SEM backtest'], index=0, horizontal=False, label_visibility='collapsed')
 st.caption('Demonstração = fictícia. Históricos = auditoria de origem declarada. O novo modo com ticker é apenas inspeção, SEM sinais ou backtest.')
@@ -265,7 +314,46 @@ else:
         st.error(f'Erro na demonstração: {exc}')
     st.warning('DEMONSTRAÇÃO 100% FICTÍCIA: candles e operações são INVENTADOS. Não avaliam eficácia no mercado.')
 
-tab_historic,tab_terminal,tab_decision,tab_bt,tab_robust,tab_audit,tab_data,tab_source=st.tabs(['🔬 Histórico','📈 Sinais','🛑 Não operar','🧪 Backtest','🧬 Robustez','🛡️ Auditoria','🔐 Dados','🧾 Fonte M1'])
+tab_smart,tab_historic,tab_terminal,tab_decision,tab_bt,tab_robust,tab_audit,tab_data,tab_source=st.tabs(['🔔 Smart Alerts','🔬 Histórico','📈 Sinais','🛑 Não operar','🧪 Backtest','🧬 Robustez','🛡️ Auditoria','🔐 Dados','🧾 Fonte M1'])
+
+with tab_smart:
+    st.subheader('🔔 Smart Alerts · v2.7')
+    st.warning('DEMONSTRAÇÃO: alertas nesta tela são simulados. O Streamlit não envia notificações nativas nem mostra janelas sobre a corretora. NÃO use para operar.')
+    st.caption('A faixa de status aparece no começo do aplicativo. O aviso é exibido apenas quando o estado muda, enquanto a sessão web está aberta. A simulação expira em 60 segundos.')
+    scenario = st.selectbox('Escolha uma situação para testar', list(DEMO_SCENARIOS),
+                            key='smart27_scenario')
+    if st.button('🔔 Simular novo estado', use_container_width=True, key='smart27_demo_button', type='primary'):
+        before = st.session_state['smart27_current']
+        candidate = demo_alert(scenario)
+        if before.event_id != candidate.event_id or before.event_id in ('sem_feed','demo_expirou'):
+            st.session_state['smart27_current'] = candidate
+            st.session_state['smart27_log'] = ([{
+                'horario_brasilia':candidate.occurred_at.strftime('%Y-%m-%d %H:%M:%S'),
+                'estado':candidate.status, 'motivo':candidate.reason,
+                'modo':'DEMONSTRACAO', 'ordem_enviada':False,
+            }] + st.session_state['smart27_log'])[:40]
+            st.session_state['smart27_notified'] = None
+            st.rerun()
+        else:
+            st.info('Estado idêntico ao anterior: aviso repetido suprimido.')
+    if st.button('🛑 Encerrar simulação / bloquear entradas',use_container_width=True,
+                 key='smart27_clear_button'):
+        st.session_state['smart27_current'] = default_alert()
+        st.session_state['smart27_notified'] = None
+        st.rerun()
+    st.markdown('**🛡️ Regras de proteção para alertas futuros**')
+    st.write('Feed ausente ou não autenticado → NÃO OPERAR. ' 
+             'Dados vencidos, candle incompleto, feriado, sessão fechada ou risco insuficiente → NÃO OPERAR. ' 
+             'Aguardando → sem avisos repetidos.')
+    st.info('O painel NÃO lê cotações ao vivo. A amostra B3 e os CSVs históricos nunca ativam sinais operáveis em tempo real.')
+    if st.session_state['smart27_log']:
+        st.markdown('**📋 Histórico dos testes nesta sessão**')
+        events_df = pd.DataFrame(st.session_state['smart27_log'])
+        st.dataframe(events_df,hide_index=True,use_container_width=True)
+        st.download_button('⬇️ Exportar auditoria das simulações',
+                           events_df.to_csv(index=False).encode('utf-8-sig'),
+                           'smart_alerts_demo_v27.csv','text/csv',use_container_width=True)
+    st.caption('Para alertas na barra do Android ou sobre outros apps, será necessário desenvolver e autorizar uma camada Android separada, conectada a um feed oficial/licenciado.')
 
 with tab_historic:
     st.subheader('🔬 Auditoria histórica 2019–2020')
