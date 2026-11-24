@@ -1,0 +1,75 @@
+name: Gerar APK Android v3.4 DEMO
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'Trader_Pro_AI_Elite_v3_4_Android.zip'
+      - '.github/workflows/android_overlay_v34.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: SDK Android preinstalado
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          TOOL="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$TOOL"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          "$TOOL" --sdk_root="$SDK" --install 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Extrair Android v3.4
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/trader-android-v34"
+          unzip -q Trader_Pro_AI_Elite_v3_4_Android.zip -d "$RUNNER_TEMP/trader-android-v34"
+          test -f "$RUNNER_TEMP/trader-android-v34/app/build.gradle"
+          test -f "$RUNNER_TEMP/trader-android-v34/app/src/main/java/com/traderproaielite/overlaydemo/BridgeRecoveryPolicy.java"
+      - name: Testar regras de seguranca, recuperacao e alertas
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/trader-android-v34"
+          mkdir -p /tmp/trader-v34-policy
+          javac -encoding UTF-8 -d /tmp/trader-v34-policy \
+            app/src/main/java/com/traderproaielite/overlaydemo/DemoSignal.java \
+            app/src/main/java/com/traderproaielite/overlaydemo/DemoPolicy.java \
+            app/src/main/java/com/traderproaielite/overlaydemo/OverlayVisibilityPolicy.java \
+            app/src/main/java/com/traderproaielite/overlaydemo/OverlayDisplayMode.java \
+            app/src/main/java/com/traderproaielite/overlaydemo/DemoBridgePolicy.java \
+            app/src/main/java/com/traderproaielite/overlaydemo/BridgeReliability.java \
+            app/src/main/java/com/traderproaielite/overlaydemo/BridgeFailure.java \
+            app/src/main/java/com/traderproaielite/overlaydemo/BridgeRecoveryPolicy.java \
+            app/src/main/java/com/traderproaielite/overlaydemo/BridgeMonitorPolicy.java \
+            tests/*.java
+          for test in DemoPolicyTest OverlayVisibilityPolicyTest OverlayDisplayModeTest DemoBridgePolicyTest BridgeReliabilityTest BridgeFailureTest BridgeRecoveryPolicyTest BridgeMonitorPolicyTest; do
+            java -cp /tmp/trader-v34-policy "$test"
+          done
+      - name: Compilar APK v3.4
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/trader-android-v34"
+          gradle --no-daemon --stacktrace :app:assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Trader-Pro-AI-Elite-Android-v3.4-DEMO
+          path: ${{ runner.temp }}/trader-android-v34/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
