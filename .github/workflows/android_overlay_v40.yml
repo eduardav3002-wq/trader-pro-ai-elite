@@ -1,0 +1,50 @@
+name: Gerar APK Android v4.0 DEMO
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'Trader_Pro_AI_Elite_v4_0_Android.zip'
+      - '.github/workflows/android_overlay_v40.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: SDK Android preinstalado
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          TOOL="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$TOOL"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          "$TOOL" --sdk_root="$SDK" --install 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Extrair projeto
+        run: unzip -q Trader_Pro_AI_Elite_v4_0_Android.zip -d android_v40
+      - name: Testar politicas Java
+        shell: bash
+        working-directory: android_v40
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/trader-tests
+          D=app/src/main/java/com/traderproaielite/overlaydemo
+          javac -encoding UTF-8 --release 17 -d /tmp/trader-tests "$D"/{BridgeFailure,BridgeMonitorPolicy,BridgeRecoveryPolicy,BridgeReliability,DemoBridgePolicy,DemoPolicy,DemoSignal,OverlayDisplayMode,OverlayVisibilityPolicy,HistoryRecoveryPolicy}.java tests/*.java
+          for f in tests/*.java; do java -cp /tmp/trader-tests "$(basename "$f" .java)" || exit 1; done
+      - name: Compilar APK DEMO
+        working-directory: android_v40
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Trader-Pro-AI-Elite-Android-v4.0-DEMO
+          path: android_v40/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
