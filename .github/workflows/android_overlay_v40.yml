@@ -1,7 +1,8 @@
-name: Gerar APK Android v4.0 DEMO
+name: Gerar APK Android v4.0 DEMO assinado
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     paths:
       - 'Trader_Pro_AI_Elite_v4_0_Android.zip'
       - '.github/workflows/android_overlay_v40.yml'
@@ -43,8 +44,41 @@ jobs:
       - name: Compilar APK DEMO
         working-directory: android_v40
         run: gradle --no-daemon --stacktrace :app:assembleDebug
+      - name: Assinar e verificar APK com chave permanente
+        shell: bash
+        working-directory: android_v40
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          if [[ -z "$ANDROID_KEYSTORE_BASE64" || -z "$ANDROID_KEYSTORE_PASSWORD" ]]; then
+            echo "::error::Configure os dois segredos ANDROID_KEYSTORE no Actions."
+            exit 1
+          fi
+          KS=$(mktemp "$RUNNER_TEMP/trader-keystore.XXXXXX")
+          trap 'rm -f "$KS"' EXIT
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KS"
+          unset ANDROID_KEYSTORE_BASE64
+          APK_SIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          INPUT=app/build/outputs/apk/debug/app-debug.apk
+          OUTPUT=app/build/outputs/apk/debug/Trader-Pro-AI-Elite-v4.0-DEMO-assinado.apk
+          "$APK_SIGNER" sign --ks "$KS" --ks-type PKCS12 \
+            --ks-key-alias traderpro \
+            --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
+            --key-pass env:ANDROID_KEYSTORE_PASSWORD \
+            --out "$OUTPUT" "$INPUT"
+          EXPECTED=$(keytool -exportcert -keystore "$KS" -storetype PKCS12 \
+            -alias traderpro -storepass:env ANDROID_KEYSTORE_PASSWORD | sha256sum | cut -d' ' -f1)
+          unset ANDROID_KEYSTORE_PASSWORD
+          REPORT=$("$APK_SIGNER" verify --verbose --print-certs "$OUTPUT")
+          printf '%s\n' "$REPORT"
+          ACTUAL=$(printf '%s\n' "$REPORT" | awk '/^Signer #1 certificate SHA-256 digest:/ {print $NF}')
+          test "$ACTUAL" = "$EXPECTED"
+          echo "Assinatura permanente verificada."
       - uses: actions/upload-artifact@v4
         with:
-          name: Trader-Pro-AI-Elite-Android-v4.0-DEMO
-          path: android_v40/app/build/outputs/apk/debug/app-debug.apk
+          name: Trader-Pro-AI-Elite-Android-v4.0-DEMO-ASSINADO
+          path: android_v40/app/build/outputs/apk/debug/Trader-Pro-AI-Elite-v4.0-DEMO-assinado.apk
           if-no-files-found: error
