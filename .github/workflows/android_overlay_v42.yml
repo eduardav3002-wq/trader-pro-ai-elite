@@ -1,6 +1,12 @@
 name: Gerar APK Android v4.2 DEMO assinado
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/android_overlay_v42.yml'
+  
 permissions:
   contents: read
 jobs:
