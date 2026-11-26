@@ -1,0 +1,84 @@
+name: Gerar APK Android v4.1 DEMO assinado
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'Trader_Pro_AI_Elite_v4_1_Android.zip'
+      - '.github/workflows/android_overlay_v41.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: SDK Android preinstalado
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          TOOL="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$TOOL"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          "$TOOL" --sdk_root="$SDK" --install 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Extrair projeto
+        run: unzip -q Trader_Pro_AI_Elite_v4_1_Android.zip -d android_v41
+      - name: Testar politicas Java
+        shell: bash
+        working-directory: android_v41
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/trader-tests
+          D=app/src/main/java/com/traderproaielite/overlaydemo
+          javac -encoding UTF-8 --release 17 -d /tmp/trader-tests "$D"/{BridgeFailure,BridgeMonitorPolicy,BridgeRecoveryPolicy,BridgeReliability,DemoBridgePolicy,DemoPolicy,DemoSignal,OverlayDisplayMode,OverlayVisibilityPolicy,HistoryRecoveryPolicy,AdaptiveEmitterPolicy}.java tests/*.java
+          for f in tests/*.java; do java -cp /tmp/trader-tests "$(basename "$f" .java)" || exit 1; done
+      - name: Compilar APK DEMO
+        working-directory: android_v41
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+      - name: Assinar e verificar APK com chave permanente
+        shell: bash
+        working-directory: android_v41
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          if [[ -z "$ANDROID_KEYSTORE_BASE64" || -z "$ANDROID_KEYSTORE_PASSWORD" ]]; then
+            echo "::error::Configure os dois segredos ANDROID_KEYSTORE no Actions."
+            exit 1
+          fi
+          KS=$(mktemp "$RUNNER_TEMP/trader-keystore.XXXXXX")
+          trap 'rm -f "$KS"' EXIT
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KS"
+          unset ANDROID_KEYSTORE_BASE64
+          APK_SIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          INPUT=app/build/outputs/apk/debug/app-debug.apk
+          OUTPUT=app/build/outputs/apk/debug/Trader-Pro-AI-Elite-v4.1-DEMO-assinado.apk
+          "$APK_SIGNER" sign --ks "$KS" --ks-type PKCS12 \
+            --ks-key-alias traderpro \
+            --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
+            --key-pass env:ANDROID_KEYSTORE_PASSWORD \
+            --out "$OUTPUT" "$INPUT"
+          EXPECTED=$(keytool -exportcert -keystore "$KS" -storetype PKCS12 \
+            -alias traderpro -storepass:env ANDROID_KEYSTORE_PASSWORD | sha256sum | cut -d' ' -f1)
+          unset ANDROID_KEYSTORE_PASSWORD
+          REPORT=$("$APK_SIGNER" verify --verbose --print-certs "$OUTPUT")
+          printf '%s\n' "$REPORT"
+          ACTUAL=$(printf '%s\n' "$REPORT" | awk '/^Signer #1 certificate SHA-256 digest:/ {print $NF}')
+          test "$ACTUAL" = "$EXPECTED"
+          echo "Assinatura permanente verificada."
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Trader-Pro-AI-Elite-Android-v4.1-DEMO-ASSINADO
+          path: android_v41/app/build/outputs/apk/debug/Trader-Pro-AI-Elite-v4.1-DEMO-assinado.apk
+          if-no-files-found: error
