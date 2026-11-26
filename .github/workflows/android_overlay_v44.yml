@@ -1,0 +1,67 @@
+name: Gerar APK Android v4.4 DEMO assinado
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/android_overlay_v44.yml"
+      - "Trader_Pro_AI_Elite_v4_4_Android.zip"
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Verificar SDK Android preinstalado
+        run: |
+          set -euo pipefail
+          test -f "$ANDROID_HOME/platforms/android-35/android.jar"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/zipalign"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Preparar projeto
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/trader-v44"
+          unzip -q Trader_Pro_AI_Elite_v4_4_Android.zip -d "$RUNNER_TEMP/trader-v44"
+      - name: Testes Java e compilacao
+        working-directory: ${{ runner.temp }}/trader-v44
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/trader-tests"
+          J=app/src/main/java/com/traderproaielite/overlaydemo
+          javac -encoding UTF-8 -d "$RUNNER_TEMP/trader-tests" $(find "$J" -name '*.java' | grep -Ev 'MainActivity|OverlayService|BridgeAuditStore|HistoryRecoveryStore|BridgeSessionStore|GuardianStore|Supabase') tests/*.java
+          for f in tests/*Test.java; do java -cp "$RUNNER_TEMP/trader-tests" "$(basename "$f" .java)"; done
+          gradle --no-daemon :app:assembleRelease
+      - name: Assinar e verificar APK
+        working-directory: ${{ runner.temp }}/trader-v44
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$KEYSTORE_B64" && test -n "$KS_PASS"
+          export KEY_PASS="${KEY_PASS:-$KS_PASS}"
+          umask 077
+          KEYSTORE="$RUNNER_TEMP/trader-v44-signing.jks"
+          trap 'rm -f "$KEYSTORE"' EXIT
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$KEYSTORE"
+          TOOLS="$ANDROID_HOME/build-tools/35.0.0"
+          "$TOOLS/zipalign" -P 16 -f 4 app/build/outputs/apk/release/app-release-unsigned.apk "$RUNNER_TEMP/trader-v44-aligned.apk"
+          mkdir -p "$RUNNER_TEMP/trader-v44-output"
+          "$TOOLS/apksigner" sign --ks "$KEYSTORE" --ks-key-alias traderpro --ks-pass env:KS_PASS --key-pass env:KEY_PASS --out "$RUNNER_TEMP/trader-v44-output/Trader_Pro_AI_Elite_v4_4_DEMO.apk" "$RUNNER_TEMP/trader-v44-aligned.apk"
+          "$TOOLS/apksigner" verify --verbose --print-certs "$RUNNER_TEMP/trader-v44-output/Trader_Pro_AI_Elite_v4_4_DEMO.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Trader_Pro_AI_Elite_v4_4_DEMO_assinado
+          path: ${{ runner.temp }}/trader-v44-output/Trader_Pro_AI_Elite_v4_4_DEMO.apk
+          if-no-files-found: error
