@@ -1,18 +1,28 @@
 name: Gerar APK Android v4.2 DEMO assinado
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/android_overlay_v42.yml"
 permissions:
   contents: read
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      - name: Verificar SDK Android preinstalado
+        run: |
+          set -euo pipefail
+          test -f "$ANDROID_HOME/platforms/android-35/android.jar"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/zipalign"
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
@@ -21,7 +31,6 @@ jobs:
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/trader-v42"
           unzip -q Trader_Pro_AI_Elite_v4_2_Android.zip -d "$RUNNER_TEMP/trader-v42"
-          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - name: Testes Java e compilacao
         working-directory: ${{ runner.temp }}/trader-v42
         run: |
